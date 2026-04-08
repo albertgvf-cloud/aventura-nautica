@@ -156,7 +156,7 @@ export default function JetQuickBook({
                 const t = e.target.value as typeof type
                 setType(t)
                 setDuration(t === 'excursion' ? 30 : t === 'circuit' ? 20 : 60)
-                setQtyByModel({ [jet?.model ?? '']: 1 })
+                setSelectedJetIds(jetId ? [jetId] : [])
               }}
                 className="w-full px-2 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 outline-none focus:ring-2 focus:ring-sky-500">
                 {isVX && <option value="excursion">Excursión (sin tit.)</option>}

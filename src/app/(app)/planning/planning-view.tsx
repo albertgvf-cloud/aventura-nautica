@@ -37,6 +37,9 @@ type Reservation = {
   arrived: boolean
   departed: boolean
   actual_time: string | null
+  jet_id: string | null
+  duration_minutes: number | null
+  group_id: string | null
   notes: string | null
 }
 

@@ -8,6 +8,7 @@ import { OFFICES, STATUSES, JETS_SLOTS, durationLabel, timeToMinutes, ALL_SIN_TI
 
 type Reservation = {
   id: string
+  activity_type?: string
   activity: string
   time: string
   num_people: number
