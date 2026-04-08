@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 180" fill="none">
+  <!-- Orange sail (left, smaller) -->
+  <path d="M45 120 L65 45 L85 120 Z" fill="#F5921B"/>
+  <!-- Blue sail (right, larger) -->
+  <path d="M75 120 L110 20 L145 120 Z" fill="#0099D6"/>
+  <!-- Light blue accent on right sail -->
+  <path d="M110 20 L145 120 L120 120 Z" fill="#00B4E6"/>
+  <!-- Text -->
+  <text x="100" y="155" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="700" fill="#1a1a1a" letter-spacing="0.5">Aventura Nàutica</text>
+</svg>
