@@ -54,10 +54,8 @@ export default async function BookingsPage() {
             </thead>
             <tbody className="divide-y divide-gray-100">
               {bookings.map((b) => {
-                // @ts-expect-error joined relations
-                const item = b.booking_items?.[0]
-                // @ts-expect-error joined relations
-                const customer = b.customers
+                const item = (b as any).booking_items?.[0]
+                const customer = (b as any).customers
                 return (
                   <tr key={b.id} className="hover:bg-gray-50">
                     <td className="px-4 py-3 text-sm font-mono text-gray-700">{b.reference}</td>
