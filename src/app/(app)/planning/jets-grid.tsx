@@ -442,7 +442,7 @@ export default function JetsGrid({
         </div>
 
         {/* TIME AXIS — sticky, no overflow ancestor between this and planning-view scroll */}
-        <div className="sticky top-0 z-40 border-b-2 border-gray-300 bg-white border-x border-gray-200" style={{ width: totalWidth, height: 32 }}>
+        <div className="sticky -top-3 sm:-top-4 lg:-top-6 z-40 border-b-2 border-gray-300 bg-white border-x border-gray-200" style={{ width: totalWidth, height: 32 }}>
           <div className="absolute top-0 bottom-0 bg-sky-100 border-r border-gray-300 z-10" style={{ width: MOTO_COL_W, position: 'sticky', left: 0 }} />
           <div className="absolute top-0 bottom-0" style={{ left: MOTO_COL_W, width: timelineWidth }}>
             {subMarks.map((m) => (
