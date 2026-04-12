@@ -138,7 +138,7 @@ export default function PlanningView({
             aria-label="Dia siguiente"
           >
             <span className="sm:hidden">&rarr;</span>
-            <span className="hidden sm:inline">Manana &rarr;</span>
+            <span className="hidden sm:inline">Mañana &rarr;</span>
           </button>
         </div>
         <div className="text-left sm:text-right">
