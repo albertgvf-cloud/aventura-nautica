@@ -506,22 +506,21 @@ export default function JetsGrid({
           </div>
 
           {/* Suggested departures guide row */}
-          <Row label={<span className="text-[10px] font-bold text-violet-700">📋 Guía</span>} labelClass="bg-violet-50" rowClass="border-b-2 border-violet-200 h-8">
-            <div className="absolute inset-0 bg-violet-50/20">
+          <Row label={<span className="text-[10px] font-bold text-violet-700">📋 Guía</span>} labelClass="bg-violet-50" rowClass="border-b-2 border-violet-200 h-12">
+            <div className="absolute inset-0 bg-violet-50/30">
               {hours.map((h) => <div key={h} className="absolute top-0 h-full border-l border-gray-200" style={{ left: px(h * 60) }} />)}
               {VX_SCHEDULE.flatMap((g) => g.slots).map((slot) => {
                 const m = timeToMinutes(slot.time)
                 const label = slot.durations.join(' · ')
                 return (
-                  <div key={slot.time} className="absolute top-0.5 bottom-0.5 flex items-center overflow-hidden"
+                  <div key={slot.time} className="absolute top-1 bottom-1 flex items-center"
                     style={{ left: px(m) }}
                     title={`${slot.time} → ${label}`}>
-                    <div className={`flex items-center gap-0.5 px-1 rounded text-[9px] font-semibold whitespace-nowrap ${
-                      slot.durations.includes('Circuitos') ? 'bg-blue-100 text-blue-700' : 'bg-violet-100 text-violet-700'
+                    <div className={`flex flex-col px-1.5 py-0.5 rounded whitespace-nowrap ${
+                      slot.durations.includes('Circuitos') ? 'bg-blue-100 text-blue-800' : 'bg-violet-100 text-violet-800'
                     }`}>
-                      <span className="font-bold">{slot.time}</span>
-                      <span className="opacity-60">|</span>
-                      <span className="font-medium">{label}</span>
+                      <span className="text-[11px] font-bold leading-tight">{slot.time}</span>
+                      <span className="text-[10px] font-medium leading-tight">{label}</span>
                     </div>
                   </div>
                 )
