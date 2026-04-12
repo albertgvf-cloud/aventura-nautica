@@ -27,6 +27,41 @@ type Reservation = {
 const PX_PER_HOUR = 200
 const MOTO_COL_W = 80
 
+// Suggested VX departure schedule
+const VX_SCHEDULE: { section: string; slots: { time: string; durations: string[] }[] }[] = [
+  {
+    section: 'Mañana',
+    slots: [
+      { time: '09:00', durations: ['1h', '30min', '2h'] },
+      { time: '09:30', durations: ['30min'] },
+      { time: '10:00', durations: ['1h', '40min'] },
+      { time: '11:00', durations: ['1h'] },
+      { time: '11:25', durations: ['30min', '40min'] },
+    ],
+  },
+  {
+    section: 'Mediodía',
+    slots: [
+      { time: '12:15', durations: ['40min'] },
+      { time: '13:00', durations: ['1h', '30min'] },
+    ],
+  },
+  {
+    section: 'Tarde',
+    slots: [
+      { time: '14:00', durations: ['Circuitos'] },
+      { time: '14:30', durations: ['Circuitos'] },
+      { time: '15:00', durations: ['1h', '40min'] },
+      { time: '16:10', durations: ['30min', '40min', '1h'] },
+      { time: '17:00', durations: ['30min'] },
+      { time: '17:30', durations: ['30min', '20min'] },
+      { time: '18:00', durations: ['1h', '2h'] },
+      { time: '19:00', durations: ['40min', '30min', '20min', '1h'] },
+      { time: '20:00', durations: ['30min'] },
+    ],
+  },
+]
+
 export default function JetsGrid({
   reservations, onSlotClick, staffNames, date,
 }: {
@@ -469,6 +504,30 @@ export default function JetsGrid({
               <span className="inline-flex items-center gap-1 ml-2"><span className="w-2.5 h-2.5 rounded bg-green-600 inline-block" /> {titCount} con tit.</span>
             </div>
           </div>
+
+          {/* Suggested departures guide row */}
+          <Row label={<span className="text-[10px] font-bold text-violet-700">📋 Guía</span>} labelClass="bg-violet-50" rowClass="border-b-2 border-violet-200 h-8">
+            <div className="absolute inset-0 bg-violet-50/20">
+              {hours.map((h) => <div key={h} className="absolute top-0 h-full border-l border-gray-200" style={{ left: px(h * 60) }} />)}
+              {VX_SCHEDULE.flatMap((g) => g.slots).map((slot) => {
+                const m = timeToMinutes(slot.time)
+                const label = slot.durations.join(' · ')
+                return (
+                  <div key={slot.time} className="absolute top-0.5 bottom-0.5 flex items-center overflow-hidden"
+                    style={{ left: px(m) }}
+                    title={`${slot.time} → ${label}`}>
+                    <div className={`flex items-center gap-0.5 px-1 rounded text-[9px] font-semibold whitespace-nowrap ${
+                      slot.durations.includes('Circuitos') ? 'bg-blue-100 text-blue-700' : 'bg-violet-100 text-violet-700'
+                    }`}>
+                      <span className="font-bold">{slot.time}</span>
+                      <span className="opacity-60">|</span>
+                      <span className="font-medium">{label}</span>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </Row>
 
           {/* VX rows — all 16 units, reservations distributed dynamically */}
           {virtualVXRows.map((bookings, i) => <VXPoolRow key={`vx-${i}`} bookings={bookings} idx={i} />)}
