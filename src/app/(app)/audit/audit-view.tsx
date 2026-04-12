@@ -24,7 +24,7 @@ const ACTION_STYLES: Record<string, { bg: string; text: string; label: string; i
 }
 
 const ACTIVITY_LABELS: Record<string, string> = {
-  nautic: 'Náuticas', parasailing: 'Parasailing', jets: 'Jets', boats: 'Barcos', catamaran: 'Catamarán',
+  nautic: 'Náuticas', parasailing: 'Parasailing', jets: 'Jets',
 }
 
 export default function AuditView({

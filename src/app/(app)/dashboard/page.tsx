@@ -22,7 +22,7 @@ export default async function DashboardPage() {
         <StatCard label="Bookings today" value="0" hint="—" />
         <StatCard label="Revenue today" value="€0" hint="—" />
         <StatCard label="Customers" value={`${customerCount ?? 0}`} hint="total" />
-        <StatCard label="Resources" value={`${resourceCount ?? 0}`} hint="boats, jets, catamarans" />
+        <StatCard label="Resources" value={`${resourceCount ?? 0}`} hint="jets, parasailing" />
       </div>
 
       <div className="p-6 bg-white rounded-xl border border-gray-200">

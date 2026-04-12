@@ -8,8 +8,6 @@ export const ACTIVITY_TYPES = [
   { id: 'nautic', label: 'Náuticas', emoji: '🚤' },
   { id: 'parasailing', label: 'Parasailing', emoji: '🪂' },
   { id: 'jets', label: 'Jets', emoji: '🏄' },
-  { id: 'boats', label: 'Barcos', emoji: '⛵' },
-  { id: 'catamaran', label: 'Catamarán', emoji: '🛥️' },
 ] as const
 
 // Activities per type, with capacity and hard max per slot
@@ -25,17 +23,6 @@ export const ACTIVITIES: Record<string, { name: string; capacity: number; hardMa
   jets: [
     { name: 'Jet individual', capacity: 22, hardMax: 22, color: '#3b82f6' },
     { name: 'Jet grupo', capacity: 5, hardMax: 5, color: '#06b6d4' },
-  ],
-  boats: [
-    { name: 'Barco con licencia', capacity: 22, hardMax: 22, color: '#0ea5e9' },
-    { name: 'Barco sin licencia', capacity: 22, hardMax: 22, color: '#14b8a6' },
-  ],
-  catamaran: [
-    { name: 'Bliss 45 Privado', capacity: 12, hardMax: 12, color: '#a855f7' },
-    { name: 'Bliss 45 Sunset', capacity: 12, hardMax: 12, color: '#d946ef' },
-    { name: 'Bliss 70 Mañana', capacity: 120, hardMax: 120, color: '#ec4899' },
-    { name: 'Bliss 70 Tarde', capacity: 120, hardMax: 120, color: '#f43f5e' },
-    { name: 'Bliss 70 Sunset', capacity: 120, hardMax: 120, color: '#e11d48' },
   ],
 }
 

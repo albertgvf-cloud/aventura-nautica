@@ -14,12 +14,14 @@ export default async function ResourcesPage() {
   }, {})
 
   const labels: Record<string, string> = {
-    boat: 'Boats',
     jet_ski: 'Jet Skis',
-    catamaran: 'Catamarans',
     parasail_boat: 'Parasail Boats',
     nautic_boat: 'Nautic Boats',
   }
+
+  // Filter out boat and catamaran resources
+  delete grouped['boat']
+  delete grouped['catamaran']
 
   return (
     <div>

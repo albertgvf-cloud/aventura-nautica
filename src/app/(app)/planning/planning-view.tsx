@@ -155,7 +155,7 @@ export default function PlanningView({
 
       {/* Activity type tabs */}
       <div className="overflow-x-auto -mx-3 px-3 sm:mx-0 sm:px-0 scrollbar-hide">
-        <div className="grid grid-cols-5 gap-2 sm:gap-3 min-w-max sm:min-w-0">
+        <div className="grid grid-cols-3 gap-2 sm:gap-3 min-w-max sm:min-w-0">
           {ACTIVITY_TYPES.map((t) => {
             const count = reservations.filter(
               (r) => r.activity_type === t.id && r.status !== 'Cancelada'

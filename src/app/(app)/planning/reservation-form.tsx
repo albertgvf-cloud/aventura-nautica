@@ -34,6 +34,7 @@ export default function ReservationForm({
   const [staff, setStaff] = useState('')
   const [office, setOffice] = useState('')
   const [status, setStatus] = useState('Confirmada')
+  const [notes, setNotes] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [warning, setWarning] = useState<string | null>(null)
@@ -109,6 +110,7 @@ export default function ReservationForm({
       staff: staff || null,
       office: office || null,
       status,
+      notes: notes.trim() || null,
     })
 
     setSaving(false)
@@ -130,6 +132,7 @@ export default function ReservationForm({
     setEmail('')
     setPhone('')
     setNumPeople(1)
+    setNotes('')
     setSuccess(true)
     setExpanded(false)
     setTimeout(() => setSuccess(false), 2000)
@@ -273,6 +276,17 @@ export default function ReservationForm({
               ))}
             </select>
           </div>
+        </div>
+
+        {/* Notes field */}
+        <div className="mt-2">
+          <input
+            type="text"
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="Comentarios..."
+            className="w-full px-2 py-2 sm:py-1.5 border border-gray-300 rounded-lg text-sm text-gray-900 outline-none focus:ring-2 focus:ring-sky-500 min-h-[44px] sm:min-h-0"
+          />
         </div>
 
         {/* Capacity indicator */}

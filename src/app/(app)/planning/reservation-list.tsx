@@ -250,6 +250,9 @@ export default function ReservationList({
                         {g.phone && <span>{g.phone}</span>}
                       </div>
                     )}
+                    {g.reservations[0]?.notes && (
+                      <p className="mt-1 text-xs text-gray-500 italic">{g.reservations[0].notes}</p>
+                    )}
                   </div>
                 </div>
                 <div className="flex gap-2 shrink-0">
@@ -301,7 +304,12 @@ export default function ReservationList({
                   <td className="px-3 py-2 font-mono text-gray-700">{g.time?.slice(0, 5)}</td>
                   <td className={`px-3 py-2 font-medium text-gray-900 ${isCancelled ? 'line-through' : ''}`}>{g.client_name}</td>
                   <td className="px-3 py-2 text-gray-600">{g.email ?? '—'}</td>
-                  <td className="px-3 py-2 text-gray-700">{g.activity}</td>
+                  <td className="px-3 py-2 text-gray-700">
+                    <div>{g.activity}</div>
+                    {g.reservations[0]?.notes && (
+                      <p className="text-xs text-gray-400 italic mt-0.5">{g.reservations[0].notes}</p>
+                    )}
+                  </td>
                   {isJets && (
                     <td className="px-3 py-2 text-center">
                       {g.jetCount > 0 && (
