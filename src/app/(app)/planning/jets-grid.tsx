@@ -459,7 +459,7 @@ export default function JetsGrid({
           </div>
         </div>
 
-        <div className="border-x border-b border-gray-200 bg-white">
+        <div className="relative z-0 border-x border-b border-gray-200 bg-white">
           {/* VX header */}
           <div className="relative border-b border-blue-200 bg-blue-50/50" style={{ width: totalWidth }}>
             <div className="sticky left-0 z-10 inline-block px-3 py-1.5 bg-blue-50 text-[10px] font-semibold text-blue-700">
