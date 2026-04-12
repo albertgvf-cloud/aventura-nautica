@@ -49,7 +49,7 @@ const VX_SCHEDULE: { section: string; slots: { time: string; durations: string[]
   {
     section: 'Tarde',
     slots: [
-      { time: '14:00', durations: ['Circuitos'] },
+      { time: '14:00', durations: ['Circuitos', '1h', '40min'] },
       { time: '14:30', durations: ['Circuitos'] },
       { time: '15:00', durations: ['1h', '40min'] },
       { time: '16:10', durations: ['30min', '40min', '1h'] },
