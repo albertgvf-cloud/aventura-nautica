@@ -56,8 +56,15 @@ export default function SlotModal({
   const allDeparted = active.length > 0 && active.every((r) => r.departed)
 
   async function markAllDeparted() {
-    const ids = active.map((r) => r.id)
-    await supabase.from('reservations').update({ departed: true }).in('id', ids)
+    // Arrived clients → Realizada, non-arrived → just mark departed
+    const arrivedIds = active.filter((r) => r.arrived).map((r) => r.id)
+    const notArrivedIds = active.filter((r) => !r.arrived).map((r) => r.id)
+    if (arrivedIds.length > 0) {
+      await supabase.from('reservations').update({ departed: true, status: 'Realizada' }).in('id', arrivedIds)
+    }
+    if (notArrivedIds.length > 0) {
+      await supabase.from('reservations').update({ departed: true }).in('id', notArrivedIds)
+    }
     for (const res of active) {
       logAudit({
         reservationId: res.id,
@@ -72,7 +79,7 @@ export default function SlotModal({
 
   async function unmarkAllDeparted() {
     const ids = active.map((r) => r.id)
-    await supabase.from('reservations').update({ departed: false }).in('id', ids)
+    await supabase.from('reservations').update({ departed: false, status: 'Confirmada' }).in('id', ids)
     for (const res of active) {
       logAudit({
         reservationId: res.id,
@@ -122,25 +129,13 @@ export default function SlotModal({
     router.refresh()
   }
 
-  async function deleteReservation(id: string, res: Reservation) {
-    if (!confirm('Eliminar esta reserva permanentemente?')) return
-    await supabase.from('reservations').delete().eq('id', id)
-    logAudit({
-      reservationId: id,
-      action: 'deleted',
-      activityType,
-      clientName: res.client_name,
-      details: `${activityName} a las ${slot}`,
-    })
-    router.refresh()
-  }
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 sm:p-4" onClick={onClose}>
       <div
-        className="bg-white w-full sm:rounded-2xl sm:shadow-2xl sm:max-w-3xl max-h-full sm:max-h-[80vh] overflow-hidden
+        className="bg-white w-full sm:rounded-2xl sm:shadow-2xl sm:max-w-3xl max-h-full sm:max-h-[90vh] overflow-hidden
                    rounded-t-2xl sm:rounded-b-2xl
-                   h-[95vh] sm:h-auto"
+                   h-[95vh] sm:h-auto flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -199,7 +194,7 @@ export default function SlotModal({
         </div>
 
         {/* Reservations list + Add form */}
-        <div className="overflow-auto flex-1 p-3 sm:p-4" style={{ maxHeight: 'calc(95vh - 140px)' }}>
+        <div className="overflow-auto flex-1 p-3 sm:p-4">
           {reservations.length === 0 && !showAddForm ? (
             <div className="text-center py-8">
               <p className="text-gray-500 mb-3">No hay reservas en esta franja.</p>
@@ -223,7 +218,7 @@ export default function SlotModal({
                   onCancel={() => cancelReservation(r.id, r)}
                   onConfirm={() => confirmReservation(r.id, r)}
                   onToggleArrived={() => toggleArrived(r.id, r.arrived, r)}
-                  onDelete={() => deleteReservation(r.id, r)}
+
                   onSaved={() => { setEditingId(null); router.refresh() }}
                 />
               ))}
@@ -264,7 +259,6 @@ function ReservationCard({
   onCancel,
   onConfirm,
   onToggleArrived,
-  onDelete,
   onSaved,
 }: {
   reservation: Reservation
@@ -275,7 +269,6 @@ function ReservationCard({
   onCancel: () => void
   onConfirm: () => void
   onToggleArrived: () => void
-  onDelete: () => void
   onSaved: () => void
 }) {
   const isCancelled = r.status === 'Cancelada'
@@ -365,6 +358,11 @@ function ReservationCard({
               <button onClick={onEdit} className="px-3 py-2 sm:py-1 text-xs border border-gray-300 rounded-lg hover:bg-gray-100 text-gray-700 min-h-[44px] sm:min-h-0 whitespace-nowrap">
                 Editar
               </button>
+              <button onClick={onToggleArrived} className={`px-3 py-2 sm:py-1 text-xs rounded-lg min-h-[44px] sm:min-h-0 whitespace-nowrap ${
+                r.arrived ? 'bg-green-100 text-green-700 border border-green-300' : 'border border-gray-300 text-gray-600 hover:bg-gray-100'
+              }`}>
+                {r.arrived ? '✓ Llegó' : 'Marcar llegada'}
+              </button>
               <button onClick={onCancel} className="px-3 py-2 sm:py-1 text-xs border border-red-200 rounded-lg hover:bg-red-50 text-red-600 min-h-[44px] sm:min-h-0 whitespace-nowrap">
                 Cancelar
               </button>
@@ -375,9 +373,6 @@ function ReservationCard({
               Reactivar
             </button>
           )}
-          <button onClick={onDelete} className="px-3 py-2 sm:py-1 text-xs border border-gray-200 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-600 min-h-[44px] sm:min-h-0 whitespace-nowrap">
-            Eliminar
-          </button>
         </div>
       </div>
 
@@ -565,8 +560,8 @@ function EditForm({
       </div>
 
       {error && <p className="text-sm text-red-600 mt-2">{error}</p>}
-      <div className="mt-2 flex gap-2">
-        <button type="submit" disabled={saving} className="px-3 py-2 sm:py-1.5 bg-sky-600 hover:bg-sky-700 disabled:bg-gray-400 text-white text-xs rounded-lg font-medium min-h-[44px] sm:min-h-0">
+      <div className="mt-2">
+        <button type="submit" disabled={saving} className="px-4 py-2.5 sm:py-2 bg-sky-600 hover:bg-sky-700 disabled:bg-gray-400 text-white text-sm rounded-lg font-medium min-h-[44px] sm:min-h-0 w-full sm:w-auto">
           {saving ? 'Guardando...' : 'Guardar cambios'}
         </button>
       </div>
@@ -716,6 +711,7 @@ function StatusBadge({ status }: { status: string }) {
     Confirmada: 'bg-green-100 text-green-700',
     Pendiente: 'bg-amber-100 text-amber-700',
     Cancelada: 'bg-red-100 text-red-700',
+    Realizada: 'bg-blue-100 text-blue-700',
   }
   return (
     <span className={`px-2 py-0.5 rounded-full text-xs ${styles[status] ?? 'bg-gray-100'}`}>

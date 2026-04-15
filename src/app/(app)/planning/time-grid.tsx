@@ -10,6 +10,7 @@ type Reservation = {
   activity: string
   time: string
   num_people: number
+  client_name: string
   status: string
   arrived: boolean
   departed: boolean
@@ -31,28 +32,83 @@ export default function TimeGrid({
   // Mobile: show one activity at a time
   const [mobileActivityIdx, setMobileActivityIdx] = useState(0)
   const currentMobileActivity = activities[mobileActivityIdx] ?? activities[0]
+  // Expanded slot for showing individual client checkboxes
+  const [expandedSlot, setExpandedSlot] = useState<{ slot: string; activity: string } | null>(null)
 
   function getSlotData(slot: string, activityName: string) {
     const slotReservations = reservations.filter(
       (r) => r.time === slot + ':00' && r.activity === activityName && r.status !== 'Cancelada'
     )
     const people = slotReservations.reduce((sum, r) => sum + r.num_people, 0)
+    const arrivedPeople = slotReservations.filter((r) => r.arrived).reduce((sum, r) => sum + r.num_people, 0)
     const total = slotReservations.length
     const arrivedCount = slotReservations.filter((r) => r.arrived).length
     const allDeparted = total > 0 && slotReservations.every((r) => r.departed)
-    return { people, total, arrivedCount, allDeparted, slotReservations }
+    return { people, arrivedPeople, total, arrivedCount, allDeparted, slotReservations }
+  }
+
+  async function toggleClientArrived(id: string, current: boolean) {
+    await supabase.from('reservations').update({ arrived: !current }).eq('id', id)
+    router.refresh()
   }
 
   async function toggleSlotDeparted(slot: string, activityName: string, currentlyDeparted: boolean) {
-    const ids = reservations
+    const slotReservations = reservations
       .filter((r) => r.time === slot + ':00' && r.activity === activityName && r.status !== 'Cancelada')
-      .map((r) => r.id)
-    if (ids.length === 0) return
-    await supabase
-      .from('reservations')
-      .update({ departed: !currentlyDeparted })
-      .in('id', ids)
+    if (slotReservations.length === 0) return
+
+    if (!currentlyDeparted) {
+      // Marking departure: arrived clients → Realizada, non-arrived → just mark departed
+      const arrivedIds = slotReservations.filter((r) => r.arrived).map((r) => r.id)
+      const notArrivedIds = slotReservations.filter((r) => !r.arrived).map((r) => r.id)
+      if (arrivedIds.length > 0) {
+        await supabase.from('reservations').update({ departed: true, status: 'Realizada' }).in('id', arrivedIds)
+      }
+      if (notArrivedIds.length > 0) {
+        await supabase.from('reservations').update({ departed: true }).in('id', notArrivedIds)
+      }
+    } else {
+      // Unmarking departure
+      const allIds = slotReservations.map((r) => r.id)
+      await supabase.from('reservations').update({ departed: false, status: 'Confirmada' }).in('id', allIds)
+    }
     router.refresh()
+  }
+
+  function toggleExpanded(slot: string, activity: string) {
+    if (expandedSlot?.slot === slot && expandedSlot?.activity === activity) {
+      setExpandedSlot(null)
+    } else {
+      setExpandedSlot({ slot, activity })
+    }
+  }
+
+  // Inline client list for a slot
+  function ClientCheckboxList({ slot, activityName }: { slot: string; activityName: string }) {
+    const { slotReservations } = getSlotData(slot, activityName)
+    if (slotReservations.length === 0) return null
+    return (
+      <div className="py-1.5 px-2 space-y-1">
+        {slotReservations.map((r) => (
+          <div key={r.id} className="flex items-center justify-between gap-2 py-1 px-1 rounded hover:bg-gray-50">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className={`text-sm ${r.arrived ? 'text-green-700 font-medium' : 'text-gray-700'}`}>
+                {r.client_name}
+              </span>
+              <span className="text-xs text-gray-400">{r.num_people} pax</span>
+            </div>
+            <button
+              onClick={() => toggleClientArrived(r.id, r.arrived)}
+              className={`text-xs px-2.5 py-1 rounded-lg whitespace-nowrap shrink-0 ${
+                r.arrived ? 'bg-green-100 text-green-700 border border-green-300' : 'border border-gray-300 text-gray-600 hover:bg-gray-100'
+              }`}
+            >
+              {r.arrived ? '✓ Llegó' : 'Llegada'}
+            </button>
+          </div>
+        ))}
+      </div>
+    )
   }
 
   return (
@@ -94,7 +150,7 @@ export default function TimeGrid({
               </thead>
               <tbody>
                 {timeSlots.map((slot, slotIdx) => {
-                  const { people, total, arrivedCount, allDeparted } = getSlotData(slot, currentMobileActivity.name)
+                  const { people, arrivedPeople, total, arrivedCount, allDeparted } = getSlotData(slot, currentMobileActivity.name)
                   const available = Math.max(0, currentMobileActivity.capacity - people)
                   const pct = currentMobileActivity.capacity > 0 ? Math.round((people / currentMobileActivity.capacity) * 100) : 0
                   const overCapacity = people > currentMobileActivity.capacity
@@ -102,6 +158,7 @@ export default function TimeGrid({
                   const hasBookings = people > 0
                   const allArrived = hasBookings && arrivedCount === total
                   const someArrived = hasBookings && arrivedCount > 0 && arrivedCount < total
+                  const isExpanded = expandedSlot?.slot === slot && expandedSlot?.activity === currentMobileActivity.name
 
                   const cellBg = overHardMax ? 'bg-red-50' :
                     overCapacity ? 'bg-amber-50' :
@@ -109,55 +166,69 @@ export default function TimeGrid({
                     allArrived ? 'bg-green-50/50' : ''
 
                   return (
-                    <tr key={slot} className={`${slotIdx % 2 === 0 ? '' : 'bg-gray-50/30'}`}>
-                      <td className="px-3 py-2.5 font-mono text-gray-700 font-medium border-r border-gray-200 sticky left-0 bg-white z-10 min-h-[44px]">
-                        {slot}
-                      </td>
-                      <td
-                        className={`px-2 py-2.5 text-center font-semibold min-h-[44px] cursor-pointer active:bg-sky-100 ${cellBg} ${
-                          overHardMax ? 'text-red-600' :
-                          overCapacity ? 'text-amber-700' :
-                          allDeparted ? 'text-blue-600' :
-                          allArrived ? 'text-green-700' :
-                          hasBookings ? 'text-sky-700' : 'text-gray-400'
-                        }`}
-                        onClick={() => onSlotClick(slot, currentMobileActivity.name)}
-                      >
-                        {hasBookings ? people : '+'}
-                      </td>
-                      <td className={`px-2 py-2.5 text-center ${cellBg} ${
-                        overHardMax ? 'text-red-600 font-bold' :
-                        available === 0 ? 'text-red-600 font-bold' : 'text-green-600'
-                      }`}>
-                        {available}
-                      </td>
-                      <td className={`px-2 py-2.5 text-center ${cellBg}`}>
-                        <OccupancyBar pct={pct} color={currentMobileActivity.color} overCapacity={overCapacity} overHardMax={overHardMax} />
-                      </td>
-                      <td className={`px-1 py-2.5 text-center ${cellBg}`}>
-                        {hasBookings && (
-                          <div className="flex flex-col items-center gap-0.5">
-                            <span className={`text-[10px] leading-tight ${
-                              allArrived ? 'text-green-600 font-semibold' :
-                              someArrived ? 'text-amber-600' : 'text-gray-400'
-                            }`}>
-                              {allArrived ? '✓' : `${arrivedCount}/${total}`}
-                            </span>
-                            <button
-                              onClick={(e) => { e.stopPropagation(); toggleSlotDeparted(slot, currentMobileActivity.name, allDeparted) }}
-                              className={`text-[10px] leading-tight px-1.5 py-1 rounded-full transition-colors min-w-[32px] min-h-[28px] ${
-                                allDeparted
-                                  ? 'bg-blue-100 text-blue-700 font-semibold'
-                                  : 'bg-gray-100 text-gray-400 hover:bg-blue-50 hover:text-blue-600'
-                              }`}
-                              title={allDeparted ? 'Actividad salio' : 'Marcar salida'}
-                            >
-                              {allDeparted ? '⛵' : '⛵'}
-                            </button>
-                          </div>
-                        )}
-                      </td>
-                    </tr>
+                    <Fragment key={slot}>
+                      <tr className={`${slotIdx % 2 === 0 ? '' : 'bg-gray-50/30'}`}>
+                        <td className="px-3 py-2.5 font-mono text-gray-700 font-medium border-r border-gray-200 sticky left-0 bg-white z-10 min-h-[44px]">
+                          {slot}
+                        </td>
+                        <td
+                          className={`px-2 py-2.5 text-center font-semibold min-h-[44px] cursor-pointer active:bg-sky-100 ${cellBg} ${
+                            overHardMax ? 'text-red-600' :
+                            overCapacity ? 'text-amber-700' :
+                            allDeparted ? 'text-blue-600' :
+                            allArrived ? 'text-green-700' :
+                            hasBookings ? 'text-sky-700' : 'text-gray-400'
+                          }`}
+                          onClick={() => onSlotClick(slot, currentMobileActivity.name)}
+                        >
+                          {hasBookings ? people : '+'}
+                        </td>
+                        <td className={`px-2 py-2.5 text-center ${cellBg} ${
+                          overHardMax ? 'text-red-600 font-bold' :
+                          available === 0 ? 'text-red-600 font-bold' : 'text-green-600'
+                        }`}>
+                          {available}
+                        </td>
+                        <td className={`px-2 py-2.5 text-center ${cellBg}`}>
+                          <OccupancyBar pct={pct} color={currentMobileActivity.color} overCapacity={overCapacity} overHardMax={overHardMax} />
+                        </td>
+                        <td className={`px-1 py-2.5 text-center ${cellBg}`}>
+                          {hasBookings && (
+                            <div className="flex flex-col items-center gap-0.5">
+                              <button
+                                onClick={(e) => { e.stopPropagation(); toggleExpanded(slot, currentMobileActivity.name) }}
+                                className={`text-[10px] leading-tight px-1.5 py-1 rounded-full transition-colors min-w-[32px] min-h-[28px] ${
+                                  arrivedPeople === people ? 'bg-green-100 text-green-700 font-semibold' :
+                                  arrivedPeople > 0 ? 'bg-amber-100 text-amber-600' : 'bg-gray-100 text-gray-400 hover:bg-green-50 hover:text-green-600'
+                                }`}
+                                title="Clic para marcar llegadas individualmente"
+                              >
+                                {arrivedPeople === people ? '✓' : `${arrivedPeople}/${people}`}
+                              </button>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); toggleSlotDeparted(slot, currentMobileActivity.name, allDeparted) }}
+                                className={`text-[10px] leading-tight px-1.5 py-1 rounded-full transition-colors min-w-[32px] min-h-[28px] ${
+                                  allDeparted
+                                    ? 'bg-blue-100 text-blue-700 font-semibold'
+                                    : 'bg-gray-100 text-gray-400 hover:bg-blue-50 hover:text-blue-600'
+                                }`}
+                                title={allDeparted ? 'Actividad salio' : 'Marcar salida'}
+                              >
+                                {allDeparted ? '⛵' : '⛵'}
+                              </button>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                      {/* Expanded client checkboxes */}
+                      {isExpanded && hasBookings && (
+                        <tr>
+                          <td colSpan={5} className="bg-green-50/30 border-b border-green-200">
+                            <ClientCheckboxList slot={slot} activityName={currentMobileActivity.name} />
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
                   )
                 })}
               </tbody>
@@ -204,82 +275,111 @@ export default function TimeGrid({
             </tr>
           </thead>
           <tbody>
-            {timeSlots.map((slot, slotIdx) => (
-              <tr key={slot} className={`hover:bg-sky-50/30 ${slotIdx % 2 === 0 ? '' : 'bg-gray-50/30'}`}>
-                <td className="px-3 py-2 font-mono text-gray-700 font-medium border-r border-gray-200 sticky left-0 bg-white z-10">{slot}</td>
-                {activities.map((a, i) => {
-                  const { people, total, arrivedCount, allDeparted } = getSlotData(slot, a.name)
-                  const available = Math.max(0, a.capacity - people)
-                  const pct = a.capacity > 0 ? Math.round((people / a.capacity) * 100) : 0
-                  const overCapacity = people > a.capacity
-                  const overHardMax = people > a.hardMax
-                  const hasBookings = people > 0
-                  const allArrived = hasBookings && arrivedCount === total
-                  const someArrived = hasBookings && arrivedCount > 0 && arrivedCount < total
+            {timeSlots.map((slot, slotIdx) => {
+              // Check if any activity in this slot is expanded
+              const expandedActivity = expandedSlot?.slot === slot ? expandedSlot.activity : null
+              return (
+                <Fragment key={slot}>
+                  <tr className={`hover:bg-sky-50/30 ${slotIdx % 2 === 0 ? '' : 'bg-gray-50/30'}`}>
+                    <td className="px-3 py-2 font-mono text-gray-700 font-medium border-r border-gray-200 sticky left-0 bg-white z-10">{slot}</td>
+                    {activities.map((a, i) => {
+                      const { people, arrivedPeople, total, arrivedCount, allDeparted } = getSlotData(slot, a.name)
+                      const available = Math.max(0, a.capacity - people)
+                      const pct = a.capacity > 0 ? Math.round((people / a.capacity) * 100) : 0
+                      const overCapacity = people > a.capacity
+                      const overHardMax = people > a.hardMax
+                      const hasBookings = people > 0
+                      const allArrived = hasBookings && arrivedCount === total
+                      const someArrived = hasBookings && arrivedCount > 0 && arrivedCount < total
 
-                  const cellBg = overHardMax ? 'bg-red-50' :
-                    overCapacity ? 'bg-amber-50' :
-                    allDeparted ? 'bg-blue-50/50' :
-                    allArrived ? 'bg-green-50/50' : ''
+                      const cellBg = overHardMax ? 'bg-red-50' :
+                        overCapacity ? 'bg-amber-50' :
+                        allDeparted ? 'bg-blue-50/50' :
+                        allArrived ? 'bg-green-50/50' : ''
 
-                  return (
-                    <Fragment key={a.name}>
-                      {/* Reservations count */}
-                      <td
-                        className={`px-2 py-2 text-center font-semibold cursor-pointer hover:bg-sky-100 transition-colors ${cellBg} ${
-                          i > 0 ? 'border-l-[3px] border-l-gray-300' : ''
-                        } ${
-                          overHardMax ? 'text-red-600' :
-                          overCapacity ? 'text-amber-700' :
-                          allDeparted ? 'text-blue-600' :
-                          allArrived ? 'text-green-700' :
-                          hasBookings ? 'text-sky-700' : 'text-gray-400 hover:text-sky-600'
-                        }`}
-                        onClick={() => onSlotClick(slot, a.name)}
-                        title={hasBookings ? `${arrivedCount}/${total} llegaron — clic para detalle` : 'Clic para añadir reserva'}
-                      >
-                        {hasBookings ? people : '+'}
-                      </td>
-                      {/* Available */}
-                      <td className={`px-2 py-2 text-center ${cellBg} ${
-                        overHardMax ? 'text-red-600 font-bold' :
-                        available === 0 ? 'text-red-600 font-bold' : 'text-green-600'
-                      }`}>
-                        {available}
-                      </td>
-                      {/* Occupancy bar */}
-                      <td className={`px-2 py-2 text-center ${cellBg}`}>
-                        <OccupancyBar pct={pct} color={a.color} overCapacity={overCapacity} overHardMax={overHardMax} />
-                      </td>
-                      {/* Status */}
-                      <td className={`px-1 py-2 text-center ${cellBg}`}>
-                        {hasBookings && (
-                          <div className="flex flex-col items-center gap-0.5">
-                            <span className={`text-[10px] leading-tight ${
-                              allArrived ? 'text-green-600 font-semibold' :
-                              someArrived ? 'text-amber-600' : 'text-gray-400'
-                            }`}>
-                              {allArrived ? '✓ todos' : someArrived ? `${arrivedCount}/${total}` : `0/${total}`}
-                            </span>
-                            <button
-                              onClick={(e) => { e.stopPropagation(); toggleSlotDeparted(slot, a.name, allDeparted) }}
-                              className={`text-[10px] leading-tight px-1.5 py-0.5 rounded-full transition-colors ${
-                                allDeparted
-                                  ? 'bg-blue-100 text-blue-700 font-semibold'
-                                  : 'bg-gray-100 text-gray-400 hover:bg-blue-50 hover:text-blue-600'
-                              }`}
-                              title={allDeparted ? 'Actividad salio — clic para desmarcar' : 'Marcar salida de actividad'}
-                            >
-                              {allDeparted ? '⛵ Salio' : '⛵'}
-                            </button>
-                          </div>
-                        )}
-                      </td>
-                    </Fragment>
-                  )
-                })}
-              </tr>
-            ))}
+                      return (
+                        <Fragment key={a.name}>
+                          {/* Reservations count */}
+                          <td
+                            className={`px-2 py-2 text-center font-semibold cursor-pointer hover:bg-sky-100 transition-colors ${cellBg} ${
+                              i > 0 ? 'border-l-[3px] border-l-gray-300' : ''
+                            } ${
+                              overHardMax ? 'text-red-600' :
+                              overCapacity ? 'text-amber-700' :
+                              allDeparted ? 'text-blue-600' :
+                              allArrived ? 'text-green-700' :
+                              hasBookings ? 'text-sky-700' : 'text-gray-400 hover:text-sky-600'
+                            }`}
+                            onClick={() => onSlotClick(slot, a.name)}
+                            title={hasBookings ? `${arrivedCount}/${total} llegaron — clic para detalle` : 'Clic para añadir reserva'}
+                          >
+                            {hasBookings ? people : '+'}
+                          </td>
+                          {/* Available */}
+                          <td className={`px-2 py-2 text-center ${cellBg} ${
+                            overHardMax ? 'text-red-600 font-bold' :
+                            available === 0 ? 'text-red-600 font-bold' : 'text-green-600'
+                          }`}>
+                            {available}
+                          </td>
+                          {/* Occupancy bar */}
+                          <td className={`px-2 py-2 text-center ${cellBg}`}>
+                            <OccupancyBar pct={pct} color={a.color} overCapacity={overCapacity} overHardMax={overHardMax} />
+                          </td>
+                          {/* Status */}
+                          <td className={`px-1 py-2 text-center ${cellBg}`}>
+                            {hasBookings && (
+                              <div className="flex flex-col items-center gap-0.5">
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); toggleExpanded(slot, a.name) }}
+                                  className={`text-[10px] leading-tight px-1.5 py-0.5 rounded-full transition-colors cursor-pointer ${
+                                    arrivedPeople === people ? 'bg-green-100 text-green-700 font-semibold hover:bg-green-200' :
+                                    arrivedPeople > 0 ? 'bg-amber-100 text-amber-600 hover:bg-amber-200' : 'bg-gray-100 text-gray-400 hover:bg-green-50 hover:text-green-600'
+                                  }`}
+                                  title="Clic para marcar llegadas individualmente"
+                                >
+                                  {arrivedPeople === people ? `✓ ${arrivedPeople}` : `${arrivedPeople}/${people}`}
+                                </button>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); toggleSlotDeparted(slot, a.name, allDeparted) }}
+                                  className={`text-[10px] leading-tight px-1.5 py-0.5 rounded-full transition-colors ${
+                                    allDeparted
+                                      ? 'bg-blue-100 text-blue-700 font-semibold'
+                                      : 'bg-gray-100 text-gray-400 hover:bg-blue-50 hover:text-blue-600'
+                                  }`}
+                                  title={allDeparted ? 'Actividad salio — clic para desmarcar' : 'Marcar salida de actividad'}
+                                >
+                                  {allDeparted ? '⛵ Salio' : '⛵'}
+                                </button>
+                              </div>
+                            )}
+                          </td>
+                        </Fragment>
+                      )
+                    })}
+                  </tr>
+                  {/* Expanded client checkboxes row */}
+                  {expandedActivity && (
+                    <tr>
+                      <td className="sticky left-0 bg-white z-10 border-r border-gray-200" />
+                      {activities.map((a, i) => (
+                        <td
+                          key={a.name}
+                          colSpan={4}
+                          className={`${i > 0 ? 'border-l-[3px] border-l-gray-300' : ''} ${
+                            a.name === expandedActivity ? 'bg-green-50/30 border-b border-green-200' : ''
+                          }`}
+                        >
+                          {a.name === expandedActivity && (
+                            <ClientCheckboxList slot={slot} activityName={a.name} />
+                          )}
+                        </td>
+                      ))}
+                    </tr>
+                  )}
+                </Fragment>
+              )
+            })}
           </tbody>
         </table>
       </div>

@@ -38,10 +38,11 @@ export default function ParasailingGrid({
       (r) => r.time?.slice(0, 5) === slot && r.activity === 'Parasailing' && r.status !== 'Cancelada'
     )
     const people = blockReservations.reduce((sum, r) => sum + r.num_people, 0)
+    const arrivedPeople = blockReservations.filter((r) => r.arrived).reduce((sum, r) => sum + r.num_people, 0)
     const total = blockReservations.length
     const arrivedCount = blockReservations.filter((r) => r.arrived).length
     const allDeparted = total > 0 && blockReservations.every((r) => r.departed)
-    return { blockReservations, people, total, arrivedCount, allDeparted }
+    return { blockReservations, people, arrivedPeople, total, arrivedCount, allDeparted }
   }
 
   // Calculate accumulated delay from previous overloaded departures
@@ -94,11 +95,25 @@ export default function ParasailingGrid({
   }
 
   async function toggleSlotDeparted(slot: string, currentlyDeparted: boolean) {
-    const ids = reservations
+    const slotReservations = reservations
       .filter((r) => r.time?.slice(0, 5) === slot && r.activity === 'Parasailing' && r.status !== 'Cancelada')
-      .map((r) => r.id)
-    if (ids.length === 0) return
-    await supabase.from('reservations').update({ departed: !currentlyDeparted }).in('id', ids)
+    if (slotReservations.length === 0) return
+
+    if (!currentlyDeparted) {
+      // Marking departure: arrived clients → Realizada, non-arrived → just mark departed
+      const arrivedIds = slotReservations.filter((r) => r.arrived).map((r) => r.id)
+      const notArrivedIds = slotReservations.filter((r) => !r.arrived).map((r) => r.id)
+      if (arrivedIds.length > 0) {
+        await supabase.from('reservations').update({ departed: true, status: 'Realizada' }).in('id', arrivedIds)
+      }
+      if (notArrivedIds.length > 0) {
+        await supabase.from('reservations').update({ departed: true }).in('id', notArrivedIds)
+      }
+    } else {
+      // Unmarking departure
+      const allIds = slotReservations.map((r) => r.id)
+      await supabase.from('reservations').update({ departed: false, status: 'Confirmada' }).in('id', allIds)
+    }
     router.refresh()
   }
 
@@ -152,7 +167,7 @@ export default function ParasailingGrid({
 
       {/* Departure blocks */}
       {PARASAILING_SLOTS.map((slot, slotIndex) => {
-        const { blockReservations, people, total, arrivedCount, allDeparted } = getBlockData(slot)
+        const { blockReservations, people, arrivedPeople, total, arrivedCount, allDeparted } = getBlockData(slot)
         const isExpanded = expandedBlock === slot
         const hasBookings = people > 0
         const flightTurns = assignFlightTurns(people)
@@ -288,10 +303,10 @@ export default function ParasailingGrid({
               <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
                 {hasBookings && (
                   <span className={`text-xs px-1.5 py-0.5 rounded-full ${
-                    allArrived ? 'bg-green-100 text-green-700' :
-                    arrivedCount > 0 ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-500'
+                    arrivedPeople === people ? 'bg-green-100 text-green-700' :
+                    arrivedPeople > 0 ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-500'
                   }`}>
-                    {allArrived ? '✓ todos' : `${arrivedCount}/${total}`}
+                    {arrivedPeople === people ? `✓ ${arrivedPeople} pax` : `${arrivedPeople}/${people} pax`}
                   </span>
                 )}
                 {hasBookings && (
@@ -393,21 +408,12 @@ export default function ParasailingGrid({
                             r.arrived ? 'bg-green-50/50' : ''
                           }`}
                         >
-                          {!isCancelled && (
-                            <input
-                              type="checkbox"
-                              checked={r.arrived}
-                              onChange={() => toggleArrived(r.id, r.arrived)}
-                              className="w-5 h-5 rounded border-gray-300 text-green-600 accent-green-600 cursor-pointer shrink-0"
-                            />
-                          )}
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
                               <span className={`font-medium text-sm text-gray-900 ${isCancelled ? 'line-through' : ''}`}>
                                 {r.client_name}
                               </span>
                               <span className="text-xs font-semibold text-purple-600">{r.num_people} pax</span>
-                              {r.arrived && <span className="text-[10px] text-green-600">✓ llegó</span>}
                               {r.departed && !r.arrived && (
                                 <span className="text-[10px] text-amber-600">⚠ no llegó</span>
                               )}
@@ -419,12 +425,24 @@ export default function ParasailingGrid({
                               {r.office && <span>· {r.office}</span>}
                             </div>
                           </div>
-                          <button
-                            onClick={() => onSlotClick(slot, 'Parasailing')}
-                            className="text-xs text-purple-600 hover:underline shrink-0 min-h-[44px] sm:min-h-0 px-2"
-                          >
-                            Detalle
-                          </button>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            {!isCancelled && (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); toggleArrived(r.id, r.arrived) }}
+                                className={`text-xs px-2.5 py-1.5 rounded-lg min-h-[44px] sm:min-h-0 whitespace-nowrap ${
+                                  r.arrived ? 'bg-green-100 text-green-700 border border-green-300' : 'border border-gray-300 text-gray-600 hover:bg-gray-100'
+                                }`}
+                              >
+                                {r.arrived ? '✓ Llegó' : 'Llegada'}
+                              </button>
+                            )}
+                            <button
+                              onClick={() => onSlotClick(slot, 'Parasailing')}
+                              className="text-xs text-purple-600 hover:underline min-h-[44px] sm:min-h-0 px-2"
+                            >
+                              Detalle
+                            </button>
+                          </div>
                         </div>
                       )
                     })}

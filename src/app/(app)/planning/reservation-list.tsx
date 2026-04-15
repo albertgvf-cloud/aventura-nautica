@@ -172,18 +172,6 @@ export default function ReservationList({
     router.refresh()
   }
 
-  async function deleteGroup(ids: string[], group: GroupedReservation) {
-    if (!confirm(`Eliminar ${ids.length > 1 ? `${ids.length} registros de esta reserva` : 'esta reserva'} permanentemente?`)) return
-    await supabase.from('reservations').delete().in('id', ids)
-    logAudit({
-      reservationId: ids[0],
-      action: 'deleted',
-      clientName: group.client_name,
-      activityType: isJets ? 'jets' : undefined,
-      details: `${group.activity} a las ${group.time?.slice(0, 5)}`,
-    })
-    router.refresh()
-  }
 
   if (reservations.length === 0) {
     return (
@@ -262,8 +250,6 @@ export default function ReservationList({
                     <button onClick={() => cancelGroup(ids, g)}
                       className="w-9 h-9 flex items-center justify-center text-xs text-red-600 rounded-lg hover:bg-red-50 border border-red-200">✗</button>
                   )}
-                  <button onClick={() => deleteGroup(ids, g)}
-                    className="w-9 h-9 flex items-center justify-center text-xs text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50 border border-gray-200">🗑</button>
                 </div>
               </div>
             </div>
@@ -336,7 +322,6 @@ export default function ReservationList({
                       {!isCancelled && (
                         <button onClick={() => cancelGroup(ids, g)} className="text-xs text-red-600 hover:underline" title="Cancelar">✗</button>
                       )}
-                      <button onClick={() => deleteGroup(ids, g)} className="text-xs text-gray-400 hover:text-red-600" title="Eliminar">🗑</button>
                     </div>
                   </td>
                 </tr>
@@ -360,6 +345,7 @@ function StatusBadge({ status }: { status: string }) {
     Confirmada: 'bg-green-100 text-green-700',
     Pendiente: 'bg-amber-100 text-amber-700',
     Cancelada: 'bg-red-100 text-red-700',
+    Realizada: 'bg-blue-100 text-blue-700',
   }
   return <span className={`px-2 py-0.5 rounded-full text-xs ${styles[status] ?? 'bg-gray-100'}`}>{status}</span>
 }

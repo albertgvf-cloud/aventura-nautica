@@ -109,20 +109,6 @@ export default function JetDetailModal({
     })
     router.refresh()
   }
-  async function deleteRes() {
-    const count = allGroupIds.length
-    if (!confirm(`Eliminar ${count > 1 ? `las ${count} motos de esta reserva` : 'esta reserva'} permanentemente?`)) return
-    await supabase.from('reservations').delete().in('id', allGroupIds)
-    logAudit({
-      reservationId: r.id,
-      action: 'deleted',
-      activityType: 'jets',
-      clientName: r.client_name,
-      details: `${r.activity} — ${count} moto(s) a las ${r.time?.slice(0, 5)}`,
-    })
-    router.refresh()
-    onClose()
-  }
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 sm:p-4" onClick={onClose}>
@@ -216,10 +202,6 @@ export default function JetDetailModal({
                     ↩ Reactivar
                   </button>
                 )}
-                <button onClick={deleteRes}
-                  className="px-3 py-2 text-sm border border-gray-200 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-600 min-h-[44px]">
-                  🗑 Eliminar
-                </button>
               </div>
             </>
           ) : (
