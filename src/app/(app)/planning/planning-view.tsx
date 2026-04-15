@@ -41,6 +41,8 @@ type Reservation = {
   duration_minutes: number | null
   group_id: string | null
   notes: string | null
+  incident_type: string | null
+  incident_comment: string | null
 }
 
 export default function PlanningView({
@@ -196,6 +198,7 @@ export default function PlanningView({
         <JetsForm date={date} reservations={allForTab} staffNames={staffNames} />
       ) : (
         <ReservationForm
+          key={activeTab}
           date={date}
           activityType={activeTab}
           activities={activities}

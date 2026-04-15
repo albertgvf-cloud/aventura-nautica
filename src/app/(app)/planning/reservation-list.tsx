@@ -25,6 +25,8 @@ type Reservation = {
   jet_id?: string | null
   group_id?: string | null
   duration_minutes?: number | null
+  incident_type?: string | null
+  incident_comment?: string | null
 }
 
 type GroupedReservation = {

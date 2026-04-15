@@ -4,6 +4,8 @@ export const OFFICES = ['Santa 1', 'Santa 2', 'Plataforma', 'Roses', 'Empu'] as 
 
 export const STATUSES = ['Confirmada', 'Pendiente', 'Cancelada'] as const
 
+export const INCIDENT_TYPES = ['Mal tiempo', 'Problema tecnico AN', 'Problema del cliente'] as const
+
 export const ACTIVITY_TYPES = [
   { id: 'nautic', label: 'Actividades', emoji: '🚤' },
   { id: 'parasailing', label: 'Parasailing', emoji: '🪂' },

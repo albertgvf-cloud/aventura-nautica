@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { logAudit } from '@/lib/audit'
-import { OFFICES, STATUSES, TIME_SLOTS } from '@/lib/config'
+import { OFFICES, STATUSES, TIME_SLOTS, INCIDENT_TYPES } from '@/lib/config'
 
 type Reservation = {
   id: string
@@ -20,6 +20,8 @@ type Reservation = {
   arrived: boolean
   departed: boolean
   notes: string | null
+  incident_type: string | null
+  incident_comment: string | null
 }
 
 export default function SlotModal({
@@ -216,6 +218,7 @@ export default function SlotModal({
                   reservation={r}
                   isEditing={editingId === r.id}
                   staffNames={staffNames}
+                  date={date}
                   onEdit={() => setEditingId(editingId === r.id ? null : r.id)}
                   onCancel={() => cancelReservation(r.id, r)}
                   onConfirm={() => confirmReservation(r.id, r)}
@@ -256,6 +259,7 @@ function ReservationCard({
   reservation: r,
   isEditing,
   staffNames,
+  date,
   onEdit,
   onCancel,
   onConfirm,
@@ -266,6 +270,7 @@ function ReservationCard({
   reservation: Reservation
   isEditing: boolean
   staffNames: string[]
+  date: string
   onEdit: () => void
   onCancel: () => void
   onConfirm: () => void
@@ -338,6 +343,13 @@ function ReservationCard({
                 </p>
               </div>
             )}
+            {r.incident_type && (
+              <div className="col-span-full">
+                <span className="text-xs text-gray-500">Incidencia</span>
+                <p className="text-amber-700 font-medium">{r.incident_type}</p>
+                {r.incident_comment && <p className="text-gray-600 text-xs mt-0.5">{r.incident_comment}</p>}
+              </div>
+            )}
             {r.notes && (
               <div className="col-span-full">
                 <span className="text-xs text-gray-500">Notas</span>
@@ -370,7 +382,7 @@ function ReservationCard({
       </div>
 
       {isEditing && !isCancelled && (
-        <EditForm reservation={r} staffNames={staffNames} onSaved={onSaved} />
+        <EditForm reservation={r} staffNames={staffNames} date={date} onSaved={onSaved} />
       )}
     </div>
   )
@@ -379,10 +391,12 @@ function ReservationCard({
 function EditForm({
   reservation: r,
   staffNames,
+  date,
   onSaved,
 }: {
   reservation: Reservation
   staffNames: string[]
+  date: string
   onSaved: () => void
 }) {
   const supabase = createClient()
@@ -395,27 +409,41 @@ function EditForm({
   const [office, setOffice] = useState(r.office ?? '')
   const [status, setStatus] = useState(r.status)
   const [notes, setNotes] = useState(r.notes ?? '')
+  const [incidentType, setIncidentType] = useState(r.incident_type ?? '')
+  const [incidentComment, setIncidentComment] = useState(r.incident_comment ?? '')
+  const [newDate, setNewDate] = useState(date)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const hasIncident = incidentType !== ''
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault()
     setSaving(true)
     setError(null)
 
+    const updateData: Record<string, unknown> = {
+      client_name: clientName.trim(),
+      email: email || null,
+      phone: phone || null,
+      num_people: numPeople,
+      time: time + ':00',
+      staff: staff || null,
+      office: office || null,
+      status,
+      notes: notes || null,
+      incident_type: incidentType || null,
+      incident_comment: incidentComment || null,
+    }
+
+    // Only include date change if an incident is set
+    if (hasIncident && newDate !== date) {
+      updateData.date = newDate
+    }
+
     const { error: err } = await supabase
       .from('reservations')
-      .update({
-        client_name: clientName.trim(),
-        email: email || null,
-        phone: phone || null,
-        num_people: numPeople,
-        time: time + ':00',
-        staff: staff || null,
-        office: office || null,
-        status,
-        notes: notes || null,
-      })
+      .update(updateData)
       .eq('id', r.id)
 
     setSaving(false)
@@ -427,6 +455,7 @@ function EditForm({
     // Build change details
     const changes: string[] = []
     if (clientName.trim() !== r.client_name) changes.push(`Nombre: ${r.client_name}→${clientName.trim()}`)
+    if (hasIncident && newDate !== date) changes.push(`Fecha: ${date}→${newDate}`)
     if (time !== (r.time?.slice(0, 5) ?? '')) changes.push(`Hora: ${r.time?.slice(0, 5)}→${time}`)
     if (numPeople !== r.num_people) changes.push(`Personas: ${r.num_people}→${numPeople}`)
     if ((staff || null) !== r.staff) changes.push(`Staff: ${r.staff ?? '—'}→${staff || '—'}`)
@@ -435,6 +464,8 @@ function EditForm({
     if ((email || null) !== r.email) changes.push('Email cambiado')
     if ((phone || null) !== r.phone) changes.push('Teléfono cambiado')
     if ((notes || null) !== r.notes) changes.push('Notas cambiadas')
+    if (incidentType && incidentType !== (r.incident_type ?? '')) changes.push(`Incidencia: ${incidentType}`)
+    if (incidentComment && incidentComment !== (r.incident_comment ?? '')) changes.push('Comentario incidencia cambiado')
 
     logAudit({
       reservationId: r.id,
@@ -498,6 +529,41 @@ function EditForm({
           </Field>
         </div>
       </div>
+
+      {/* Incident section */}
+      <div className="mt-3 pt-3 border-t border-gray-200">
+        <h4 className="text-xs font-semibold text-gray-700 mb-2">Incidencia (cambio de dia/hora)</h4>
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2">
+          <Field label="Tipo de incidencia">
+            <select value={incidentType} onChange={(e) => setIncidentType(e.target.value)} className="input">
+              <option value="">Sin incidencia</option>
+              {INCIDENT_TYPES.map((t) => (
+                <option key={t} value={t}>{t}</option>
+              ))}
+            </select>
+          </Field>
+          {hasIncident && (
+            <>
+              <Field label="Nuevo dia">
+                <input type="date" value={newDate} onChange={(e) => setNewDate(e.target.value)} className="input" />
+              </Field>
+              <div className="col-span-full sm:col-span-2">
+                <Field label="Comentario incidencia">
+                  <textarea
+                    value={incidentComment}
+                    onChange={(e) => setIncidentComment(e.target.value)}
+                    className="input"
+                    placeholder="Detalles de la incidencia..."
+                    rows={2}
+                    style={{ resize: 'vertical' }}
+                  />
+                </Field>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
       {error && <p className="text-sm text-red-600 mt-2">{error}</p>}
       <div className="mt-2 flex gap-2">
         <button type="submit" disabled={saving} className="px-3 py-2 sm:py-1.5 bg-sky-600 hover:bg-sky-700 disabled:bg-gray-400 text-white text-xs rounded-lg font-medium min-h-[44px] sm:min-h-0">
@@ -508,6 +574,7 @@ function EditForm({
         .input { width: 100%; padding: 0.625rem 0.5rem; border: 1px solid #d1d5db; border-radius: 0.5rem; font-size: 0.8rem; color: #111827; outline: none; min-height: 44px; }
         @media (min-width: 640px) { .input { padding: 0.375rem 0.5rem; min-height: auto; } }
         .input:focus { border-color: transparent; box-shadow: 0 0 0 2px #0ea5e9; }
+        textarea.input { min-height: 60px; }
       `}</style>
     </form>
   )

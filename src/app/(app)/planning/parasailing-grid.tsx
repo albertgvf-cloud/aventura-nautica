@@ -18,6 +18,8 @@ type Reservation = {
   departed: boolean
   staff: string | null
   office: string | null
+  incident_type: string | null
+  incident_comment: string | null
 }
 
 export default function ParasailingGrid({
