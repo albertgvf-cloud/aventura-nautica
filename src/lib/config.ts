@@ -6,9 +6,7 @@ export const STATUSES = ['Confirmada', 'Pendiente', 'Cancelada', 'Realizada'] as
 
 export const INCIDENT_TYPES = ['Mal tiempo', 'Problema tecnico AN', 'Problema del cliente'] as const
 
-export const INCIDENT_RESOLUTIONS = ['Cambio de dia', 'Modificar n pers', 'Cancelar + generar vale', 'Cancelar + devolucion'] as const
-
-export const REFUND_TYPES = ['Vale', 'Devolucion'] as const
+export const INCIDENT_RESOLUTIONS = ['Cambio de dia', 'Cancelar + generar vale', 'Cancelar + devolucion'] as const
 
 export const ACTIVITY_TYPES = [
   { id: 'nautic', label: 'Actividades', emoji: '🚤' },

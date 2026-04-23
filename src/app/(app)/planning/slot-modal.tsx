@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { logAudit } from '@/lib/audit'
-import { OFFICES, STATUSES, TIME_SLOTS, INCIDENT_TYPES, INCIDENT_RESOLUTIONS, REFUND_TYPES } from '@/lib/config'
+import { OFFICES, STATUSES, TIME_SLOTS, INCIDENT_TYPES, INCIDENT_RESOLUTIONS } from '@/lib/config'
 
 type Reservation = {
   id: string
@@ -206,10 +206,11 @@ export default function SlotModal({
                   isEditing={editingId === r.id}
                   staffNames={staffNames}
                   date={date}
+                  activityType={activityType}
+                  activityName={activityName}
                   onEdit={() => setEditingId(editingId === r.id ? null : r.id)}
                   onConfirm={() => confirmReservation(r.id, r)}
                   onToggleArrived={() => toggleArrived(r.id, r.arrived, r)}
-
                   onSaved={() => { setEditingId(null); router.refresh() }}
                 />
               ))}
@@ -246,6 +247,8 @@ function ReservationCard({
   isEditing,
   staffNames,
   date,
+  activityType,
+  activityName,
   onEdit,
   onConfirm,
   onToggleArrived,
@@ -255,6 +258,8 @@ function ReservationCard({
   isEditing: boolean
   staffNames: string[]
   date: string
+  activityType: string
+  activityName: string
   onEdit: () => void
   onConfirm: () => void
   onToggleArrived: () => void
@@ -382,7 +387,7 @@ function ReservationCard({
       </div>
 
       {isEditing && !isCancelled && (
-        <EditForm reservation={r} staffNames={staffNames} date={date} onSaved={onSaved} />
+        <EditForm reservation={r} staffNames={staffNames} date={date} activityType={activityType} activityName={activityName} onSaved={onSaved} />
       )}
     </div>
   )
@@ -392,18 +397,21 @@ function EditForm({
   reservation: r,
   staffNames,
   date,
+  activityType,
+  activityName,
   onSaved,
 }: {
   reservation: Reservation
   staffNames: string[]
   date: string
+  activityType: string
+  activityName: string
   onSaved: () => void
 }) {
   const supabase = createClient()
   const [clientName, setClientName] = useState(r.client_name)
   const [email, setEmail] = useState(r.email ?? '')
   const [phone, setPhone] = useState(r.phone ?? '')
-  const [numPeople, setNumPeople] = useState(r.num_people)
   const [time, setTime] = useState(r.time?.slice(0, 5) ?? '')
   const [staff, setStaff] = useState(r.staff ?? '')
   const [office, setOffice] = useState(r.office ?? '')
@@ -415,68 +423,116 @@ function EditForm({
   const [refundAmount, setRefundAmount] = useState<string>(
     r.incident_refund_amount != null ? String(r.incident_refund_amount) : ''
   )
-  const [refundType, setRefundType] = useState(r.incident_refund_type ?? '')
+  const [affected, setAffected] = useState(r.num_people)
   const [newDate, setNewDate] = useState(date)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const hasIncident = incidentType !== ''
+  const isJets = activityType === 'jets'
+  const unitLabel = isJets ? 'motos' : 'personas'
+  const canSplit = !isJets && r.num_people > 1
   const showDateChange = hasIncident && incidentResolution === 'Cambio de dia'
-  const showPeopleChange = hasIncident && incidentResolution === 'Modificar n pers'
   const isVoucher = hasIncident && incidentResolution === 'Cancelar + generar vale'
   const isRefund = hasIncident && incidentResolution === 'Cancelar + devolucion'
   const isCancelling = isVoucher || isRefund
-  const showAmount = showPeopleChange || isVoucher || isRefund
+  const showAmount = isVoucher || isRefund
+  // How many people/motos this incident applies to. Full reservation by default.
+  const affectedCount = canSplit ? Math.max(1, Math.min(r.num_people, affected)) : r.num_people
+  const isPartial = hasIncident && incidentResolution !== '' && affectedCount < r.num_people
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault()
     setSaving(true)
     setError(null)
 
-    const finalStatus = isCancelling ? 'Cancelada' : status
-    // num_people is only editable via "Modificar n pers" incident resolution
-    const finalNumPeople = showPeopleChange ? numPeople : r.num_people
     const parsedAmount = refundAmount.trim() === '' ? null : Number(refundAmount)
 
-    const updateData: Record<string, unknown> = {
+    // Shared client-info fields (apply to all rows we touch)
+    const clientFields = {
       client_name: clientName.trim(),
       email: email || null,
       phone: phone || null,
-      num_people: finalNumPeople,
-      time: time + ':00',
       staff: staff || null,
       office: office || null,
-      status: finalStatus,
       notes: notes || null,
+    }
+
+    if (isPartial) {
+      // Split: original row keeps (num_people - affectedCount) unaffected people; new row carries the incident
+      const remaining = r.num_people - affectedCount
+
+      const originalUpdate: Record<string, unknown> = {
+        ...clientFields,
+        num_people: remaining,
+        time: time + ':00',
+        status,
+        // Clear incident fields on the remaining portion
+        incident_type: null,
+        incident_comment: null,
+        incident_resolution: null,
+        incident_refund_amount: null,
+        incident_refund_type: null,
+      }
+
+      const newRow: Record<string, unknown> = {
+        ...clientFields,
+        activity_type: activityType,
+        activity: activityName,
+        date: showDateChange ? newDate : date,
+        time: time + ':00',
+        num_people: affectedCount,
+        status: isCancelling ? 'Cancelada' : 'Confirmada',
+        incident_type: incidentType,
+        incident_comment: incidentComment || null,
+        incident_resolution: incidentResolution,
+        incident_refund_amount: showAmount ? parsedAmount : null,
+        incident_refund_type: null,
+      }
+
+      const { error: updErr } = await supabase.from('reservations').update(originalUpdate).eq('id', r.id)
+      if (updErr) { setSaving(false); setError(updErr.message); return }
+
+      const { error: insErr } = await supabase.from('reservations').insert(newRow)
+      if (insErr) { setSaving(false); setError(insErr.message); return }
+
+      logAudit({
+        reservationId: r.id,
+        action: 'modified',
+        clientName: clientName.trim(),
+        performedBy: staff || undefined,
+        details: `Incidencia parcial: ${affectedCount}/${r.num_people} ${unitLabel} · ${incidentResolution}${parsedAmount != null ? ` · ${parsedAmount}€` : ''}`,
+      })
+
+      setSaving(false)
+      onSaved()
+      return
+    }
+
+    // Full update path (either no incident, or incident applies to the whole reservation)
+    const finalStatus = isCancelling ? 'Cancelada' : status
+    const updateData: Record<string, unknown> = {
+      ...clientFields,
+      time: time + ':00',
+      status: finalStatus,
       incident_type: incidentType || null,
       incident_comment: incidentComment || null,
       incident_resolution: hasIncident ? (incidentResolution || null) : null,
-      incident_refund_amount: hasIncident && showAmount ? parsedAmount : null,
-      incident_refund_type: showPeopleChange ? (refundType || null) : null,
+      incident_refund_amount: showAmount ? parsedAmount : null,
+      incident_refund_type: null,
     }
-
-    // Only include date change if resolution calls for it
     if (showDateChange && newDate !== date) {
       updateData.date = newDate
     }
 
-    const { error: err } = await supabase
-      .from('reservations')
-      .update(updateData)
-      .eq('id', r.id)
-
+    const { error: err } = await supabase.from('reservations').update(updateData).eq('id', r.id)
     setSaving(false)
-    if (err) {
-      setError(err.message)
-      return
-    }
+    if (err) { setError(err.message); return }
 
-    // Build change details
     const changes: string[] = []
     if (clientName.trim() !== r.client_name) changes.push(`Nombre: ${r.client_name}→${clientName.trim()}`)
     if (showDateChange && newDate !== date) changes.push(`Fecha: ${date}→${newDate}`)
     if (time !== (r.time?.slice(0, 5) ?? '')) changes.push(`Hora: ${r.time?.slice(0, 5)}→${time}`)
-    if (showPeopleChange && numPeople !== r.num_people) changes.push(`Personas: ${r.num_people}→${numPeople}`)
     if ((staff || null) !== r.staff) changes.push(`Staff: ${r.staff ?? '—'}→${staff || '—'}`)
     if ((office || null) !== r.office) changes.push(`Oficina: ${r.office ?? '—'}→${office || '—'}`)
     if (finalStatus !== r.status) changes.push(`Estado: ${r.status}→${finalStatus}`)
@@ -510,14 +566,14 @@ function EditForm({
         <Field label="Email">
           <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="input" />
         </Field>
-        <Field label="N Personas">
+        <Field label={isJets ? 'N Motos' : 'N Personas'}>
           <input
             type="number"
             min={1}
             value={r.num_people}
             disabled
             className="input bg-gray-100 text-gray-500 cursor-not-allowed"
-            title="Para modificar, usa una incidencia con resolucion 'Modificar n pers'"
+            title="Para reducir, crea una incidencia y ajusta las afectadas"
           />
         </Field>
         <Field label="Hora">
@@ -625,55 +681,42 @@ function EditForm({
                 Antes de procesar una devolucion, intenta ofrecer al cliente un cambio de dia o un vale.
               </div>
             )}
-            {isCancelling && (
-              <p className="mt-2 text-xs text-gray-600">Al guardar, la reserva quedara marcada como Cancelada.</p>
-            )}
-            {showPeopleChange && (
+            {incidentResolution && (
               <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2">
-                <Field label="Nuevo n personas">
-                  <input
-                    type="number"
-                    min={1}
-                    value={numPeople}
-                    onChange={(e) => setNumPeople(Number(e.target.value))}
-                    className="input"
-                  />
-                </Field>
-                <Field label="Importe (€)">
-                  <input
-                    type="number"
-                    min={0}
-                    step="0.01"
-                    value={refundAmount}
-                    onChange={(e) => setRefundAmount(e.target.value)}
-                    className="input"
-                    placeholder="0.00"
-                  />
-                </Field>
-                <Field label="Tipo">
-                  <select value={refundType} onChange={(e) => setRefundType(e.target.value)} className="input">
-                    <option value="">--</option>
-                    {REFUND_TYPES.map((t) => (
-                      <option key={t} value={t}>{t}</option>
-                    ))}
-                  </select>
-                </Field>
+                {canSplit && (
+                  <Field label={`${isJets ? 'Motos' : 'Personas'} afectadas (de ${r.num_people})`}>
+                    <input
+                      type="number"
+                      min={1}
+                      max={r.num_people}
+                      value={affected}
+                      onChange={(e) => setAffected(Number(e.target.value))}
+                      className="input"
+                    />
+                  </Field>
+                )}
+                {showAmount && (
+                  <Field label={isVoucher ? 'Importe del vale (€)' : 'Importe a devolver (€)'}>
+                    <input
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      value={refundAmount}
+                      onChange={(e) => setRefundAmount(e.target.value)}
+                      className="input"
+                      placeholder="0.00"
+                    />
+                  </Field>
+                )}
               </div>
             )}
-            {(isVoucher || isRefund) && (
-              <div className="mt-3">
-                <Field label={isVoucher ? 'Importe del vale (€)' : 'Importe a devolver (€)'}>
-                  <input
-                    type="number"
-                    min={0}
-                    step="0.01"
-                    value={refundAmount}
-                    onChange={(e) => setRefundAmount(e.target.value)}
-                    className="input sm:max-w-xs"
-                    placeholder="0.00"
-                  />
-                </Field>
-              </div>
+            {isPartial && (
+              <p className="mt-2 text-xs text-sky-700">
+                Se dividira la reserva: {r.num_people - affectedCount} {unitLabel} permaneceran, {affectedCount} {unitLabel} con incidencia.
+              </p>
+            )}
+            {isCancelling && !isPartial && (
+              <p className="mt-2 text-xs text-gray-600">Al guardar, la reserva quedara marcada como Cancelada.</p>
             )}
           </div>
         )}
