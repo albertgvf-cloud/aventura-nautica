@@ -533,9 +533,18 @@ function EditForm({
             </select>
           </Field>
           {showDateChange && (
-            <Field label="Nuevo dia">
-              <input type="date" value={newDate} onChange={(e) => setNewDate(e.target.value)} className="input" />
-            </Field>
+            <>
+              <Field label="Nuevo dia">
+                <input type="date" value={newDate} onChange={(e) => setNewDate(e.target.value)} className="input" />
+              </Field>
+              <Field label="Nueva hora">
+                <select value={time} onChange={(e) => setTime(e.target.value)} className="input">
+                  {TIME_SLOTS.map((t) => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                </select>
+              </Field>
+            </>
           )}
           {hasIncident && (
             <div className="col-span-full sm:col-span-2">
