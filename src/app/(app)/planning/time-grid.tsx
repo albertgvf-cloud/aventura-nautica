@@ -97,14 +97,22 @@ export default function TimeGrid({
               </span>
               <span className="text-xs text-gray-400">{r.num_people} pax</span>
             </div>
-            <button
-              onClick={() => toggleClientArrived(r.id, r.arrived)}
-              className={`text-xs px-2.5 py-1 rounded-lg whitespace-nowrap shrink-0 ${
-                r.arrived ? 'bg-green-100 text-green-700 border border-green-300' : 'border border-gray-300 text-gray-600 hover:bg-gray-100'
-              }`}
-            >
-              {r.arrived ? '✓ Llegó' : 'Llegada'}
-            </button>
+            <div className="flex gap-1 shrink-0">
+              <button
+                onClick={() => toggleClientArrived(r.id, r.arrived)}
+                className={`text-xs px-2.5 py-1 rounded-lg whitespace-nowrap font-medium ${
+                  r.arrived ? 'bg-green-600 text-white border border-green-600' : 'border border-gray-300 text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                {r.arrived ? '✓ Llegado' : 'Llegado'}
+              </button>
+              <button
+                onClick={() => onSlotClick(slot, activityName)}
+                className="text-xs px-2.5 py-1 rounded-lg whitespace-nowrap font-medium border border-sky-300 text-sky-700 hover:bg-sky-50"
+              >
+                Detalle
+              </button>
+            </div>
           </div>
         ))}
       </div>

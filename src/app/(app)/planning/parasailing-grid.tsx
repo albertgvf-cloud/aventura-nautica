@@ -382,16 +382,16 @@ export default function ParasailingGrid({
                             {!isCancelled && (
                               <button
                                 onClick={(e) => { e.stopPropagation(); toggleArrived(r.id, r.arrived) }}
-                                className={`text-xs px-2.5 py-1.5 rounded-lg min-h-[44px] sm:min-h-0 whitespace-nowrap ${
-                                  r.arrived ? 'bg-green-100 text-green-700 border border-green-300' : 'border border-gray-300 text-gray-600 hover:bg-gray-100'
+                                className={`text-xs px-2.5 py-1.5 rounded-lg min-h-[44px] sm:min-h-0 whitespace-nowrap font-medium ${
+                                  r.arrived ? 'bg-green-600 text-white border border-green-600' : 'border border-gray-300 text-gray-700 hover:bg-gray-100'
                                 }`}
                               >
-                                {r.arrived ? '✓ Llegó' : 'Llegada'}
+                                {r.arrived ? '✓ Llegado' : 'Llegado'}
                               </button>
                             )}
                             <button
                               onClick={() => onSlotClick(slot, 'Parasailing')}
-                              className="text-xs text-purple-600 hover:underline min-h-[44px] sm:min-h-0 px-2"
+                              className="text-xs px-2.5 py-1.5 rounded-lg whitespace-nowrap font-medium border border-sky-300 text-sky-700 hover:bg-sky-50 min-h-[44px] sm:min-h-0"
                             >
                               Detalle
                             </button>
