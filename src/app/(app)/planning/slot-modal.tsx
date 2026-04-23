@@ -359,21 +359,20 @@ function ReservationCard({
         <div className="flex flex-row sm:flex-col gap-1.5 sm:gap-1 shrink-0 overflow-x-auto">
           {!isCancelled && (
             <>
-              <button onClick={onEdit} className="px-3 py-2 sm:py-1 text-xs border border-gray-300 rounded-lg hover:bg-gray-100 text-gray-700 min-h-[44px] sm:min-h-0 whitespace-nowrap">
-                Editar
-              </button>
-              <button onClick={onToggleArrived} className={`px-3 py-2 sm:py-1 text-xs rounded-lg min-h-[44px] sm:min-h-0 whitespace-nowrap ${
-                r.arrived ? 'bg-green-100 text-green-700 border border-green-300' : 'border border-gray-300 text-gray-600 hover:bg-gray-100'
+              <button onClick={onToggleArrived} className={`px-3 py-2 sm:py-1.5 text-sm rounded-lg min-h-[44px] sm:min-h-0 whitespace-nowrap font-medium ${
+                r.arrived ? 'bg-green-600 text-white border border-green-600' : 'border border-gray-300 text-gray-700 hover:bg-gray-100'
               }`}>
-                {r.arrived ? '✓ Llegó' : 'Marcar llegada'}
+                {r.arrived ? '✓ Llegado' : 'Llegado'}
               </button>
-              <button onClick={onCancel} className="px-3 py-2 sm:py-1 text-xs border border-red-200 rounded-lg hover:bg-red-50 text-red-600 min-h-[44px] sm:min-h-0 whitespace-nowrap">
-                Cancelar
+              <button onClick={onEdit} className={`px-3 py-2 sm:py-1.5 text-sm rounded-lg min-h-[44px] sm:min-h-0 whitespace-nowrap font-medium ${
+                isEditing ? 'bg-sky-600 text-white border border-sky-600' : 'border border-sky-300 text-sky-700 hover:bg-sky-50'
+              }`}>
+                {isEditing ? 'Cerrar detalle' : 'Detalle'}
               </button>
             </>
           )}
           {isCancelled && (
-            <button onClick={onConfirm} className="px-3 py-2 sm:py-1 text-xs border border-green-200 rounded-lg hover:bg-green-50 text-green-600 min-h-[44px] sm:min-h-0 whitespace-nowrap">
+            <button onClick={onConfirm} className="px-3 py-2 sm:py-1.5 text-sm border border-green-200 rounded-lg hover:bg-green-50 text-green-600 min-h-[44px] sm:min-h-0 whitespace-nowrap font-medium">
               Reactivar
             </button>
           )}
@@ -381,7 +380,7 @@ function ReservationCard({
       </div>
 
       {isEditing && !isCancelled && (
-        <EditForm reservation={r} staffNames={staffNames} date={date} onSaved={onSaved} />
+        <EditForm reservation={r} staffNames={staffNames} date={date} onCancelReservation={onCancel} onSaved={onSaved} />
       )}
     </div>
   )
@@ -391,11 +390,13 @@ function EditForm({
   reservation: r,
   staffNames,
   date,
+  onCancelReservation,
   onSaved,
 }: {
   reservation: Reservation
   staffNames: string[]
   date: string
+  onCancelReservation: () => void
   onSaved: () => void
 }) {
   const supabase = createClient()
@@ -604,9 +605,16 @@ function EditForm({
       </div>
 
       {error && <p className="text-sm text-red-600 mt-2">{error}</p>}
-      <div className="mt-2">
+      <div className="mt-3 flex flex-col sm:flex-row gap-2 sm:items-center sm:justify-between">
         <button type="submit" disabled={saving} className="px-4 py-2.5 sm:py-2 bg-sky-600 hover:bg-sky-700 disabled:bg-gray-400 text-white text-sm rounded-lg font-medium min-h-[44px] sm:min-h-0 w-full sm:w-auto">
           {saving ? 'Guardando...' : 'Guardar cambios'}
+        </button>
+        <button
+          type="button"
+          onClick={onCancelReservation}
+          className="px-4 py-2.5 sm:py-2 border border-red-300 text-red-600 hover:bg-red-50 text-sm rounded-lg font-medium min-h-[44px] sm:min-h-0 w-full sm:w-auto"
+        >
+          Cancelar reserva
         </button>
       </div>
       <style>{`
