@@ -93,19 +93,6 @@ export default function SlotModal({
     router.refresh()
   }
 
-  async function cancelReservation(id: string, res: Reservation) {
-    await supabase.from('reservations').update({ status: 'Cancelada' }).eq('id', id)
-    logAudit({
-      reservationId: id,
-      action: 'cancelled',
-      activityType,
-      clientName: res.client_name,
-      performedBy: res.staff || undefined,
-      details: `${activityName} a las ${slot}`,
-    })
-    router.refresh()
-  }
-
   async function confirmReservation(id: string, res: Reservation) {
     await supabase.from('reservations').update({ status: 'Confirmada' }).eq('id', id)
     logAudit({
@@ -216,7 +203,6 @@ export default function SlotModal({
                   staffNames={staffNames}
                   date={date}
                   onEdit={() => setEditingId(editingId === r.id ? null : r.id)}
-                  onCancel={() => cancelReservation(r.id, r)}
                   onConfirm={() => confirmReservation(r.id, r)}
                   onToggleArrived={() => toggleArrived(r.id, r.arrived, r)}
 
@@ -257,7 +243,6 @@ function ReservationCard({
   staffNames,
   date,
   onEdit,
-  onCancel,
   onConfirm,
   onToggleArrived,
   onSaved,
@@ -267,7 +252,6 @@ function ReservationCard({
   staffNames: string[]
   date: string
   onEdit: () => void
-  onCancel: () => void
   onConfirm: () => void
   onToggleArrived: () => void
   onSaved: () => void
@@ -380,7 +364,7 @@ function ReservationCard({
       </div>
 
       {isEditing && !isCancelled && (
-        <EditForm reservation={r} staffNames={staffNames} date={date} onCancelReservation={onCancel} onSaved={onSaved} />
+        <EditForm reservation={r} staffNames={staffNames} date={date} onSaved={onSaved} />
       )}
     </div>
   )
@@ -390,13 +374,11 @@ function EditForm({
   reservation: r,
   staffNames,
   date,
-  onCancelReservation,
   onSaved,
 }: {
   reservation: Reservation
   staffNames: string[]
   date: string
-  onCancelReservation: () => void
   onSaved: () => void
 }) {
   const supabase = createClient()
@@ -605,16 +587,9 @@ function EditForm({
       </div>
 
       {error && <p className="text-sm text-red-600 mt-2">{error}</p>}
-      <div className="mt-3 flex flex-col sm:flex-row gap-2 sm:items-center sm:justify-between">
+      <div className="mt-3">
         <button type="submit" disabled={saving} className="px-4 py-2.5 sm:py-2 bg-sky-600 hover:bg-sky-700 disabled:bg-gray-400 text-white text-sm rounded-lg font-medium min-h-[44px] sm:min-h-0 w-full sm:w-auto">
           {saving ? 'Guardando...' : 'Guardar cambios'}
-        </button>
-        <button
-          type="button"
-          onClick={onCancelReservation}
-          className="px-4 py-2.5 sm:py-2 border border-red-300 text-red-600 hover:bg-red-50 text-sm rounded-lg font-medium min-h-[44px] sm:min-h-0 w-full sm:w-auto"
-        >
-          Cancelar reserva
         </button>
       </div>
       <style>{`
