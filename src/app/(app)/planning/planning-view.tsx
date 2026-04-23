@@ -43,6 +43,7 @@ type Reservation = {
   notes: string | null
   incident_type: string | null
   incident_comment: string | null
+  incident_resolution: string | null
 }
 
 export default function PlanningView({

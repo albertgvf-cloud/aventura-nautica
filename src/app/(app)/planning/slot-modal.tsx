@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { logAudit } from '@/lib/audit'
-import { OFFICES, STATUSES, TIME_SLOTS, INCIDENT_TYPES } from '@/lib/config'
+import { OFFICES, STATUSES, TIME_SLOTS, INCIDENT_TYPES, INCIDENT_RESOLUTIONS } from '@/lib/config'
 
 type Reservation = {
   id: string
@@ -22,6 +22,7 @@ type Reservation = {
   notes: string | null
   incident_type: string | null
   incident_comment: string | null
+  incident_resolution: string | null
 }
 
 export default function SlotModal({
@@ -340,6 +341,9 @@ function ReservationCard({
               <div className="col-span-full">
                 <span className="text-xs text-gray-500">Incidencia</span>
                 <p className="text-amber-700 font-medium">{r.incident_type}</p>
+                {r.incident_resolution && (
+                  <p className="text-amber-800 text-xs mt-0.5">Solucion: {r.incident_resolution}</p>
+                )}
                 {r.incident_comment && <p className="text-gray-600 text-xs mt-0.5">{r.incident_comment}</p>}
               </div>
             )}
@@ -406,16 +410,22 @@ function EditForm({
   const [notes, setNotes] = useState(r.notes ?? '')
   const [incidentType, setIncidentType] = useState(r.incident_type ?? '')
   const [incidentComment, setIncidentComment] = useState(r.incident_comment ?? '')
+  const [incidentResolution, setIncidentResolution] = useState(r.incident_resolution ?? '')
   const [newDate, setNewDate] = useState(date)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const hasIncident = incidentType !== ''
+  const showDateChange = hasIncident && incidentResolution === 'Cambio de dia'
+  const isRefund = hasIncident && incidentResolution === 'Cancelar + devolucion'
+  const isCancelling = hasIncident && (incidentResolution === 'Cancelar + generar vale' || incidentResolution === 'Cancelar + devolucion')
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault()
     setSaving(true)
     setError(null)
+
+    const finalStatus = isCancelling ? 'Cancelada' : status
 
     const updateData: Record<string, unknown> = {
       client_name: clientName.trim(),
@@ -425,14 +435,15 @@ function EditForm({
       time: time + ':00',
       staff: staff || null,
       office: office || null,
-      status,
+      status: finalStatus,
       notes: notes || null,
       incident_type: incidentType || null,
       incident_comment: incidentComment || null,
+      incident_resolution: hasIncident ? (incidentResolution || null) : null,
     }
 
-    // Only include date change if an incident is set
-    if (hasIncident && newDate !== date) {
+    // Only include date change if resolution calls for it
+    if (showDateChange && newDate !== date) {
       updateData.date = newDate
     }
 
@@ -450,16 +461,17 @@ function EditForm({
     // Build change details
     const changes: string[] = []
     if (clientName.trim() !== r.client_name) changes.push(`Nombre: ${r.client_name}→${clientName.trim()}`)
-    if (hasIncident && newDate !== date) changes.push(`Fecha: ${date}→${newDate}`)
+    if (showDateChange && newDate !== date) changes.push(`Fecha: ${date}→${newDate}`)
     if (time !== (r.time?.slice(0, 5) ?? '')) changes.push(`Hora: ${r.time?.slice(0, 5)}→${time}`)
     if (numPeople !== r.num_people) changes.push(`Personas: ${r.num_people}→${numPeople}`)
     if ((staff || null) !== r.staff) changes.push(`Staff: ${r.staff ?? '—'}→${staff || '—'}`)
     if ((office || null) !== r.office) changes.push(`Oficina: ${r.office ?? '—'}→${office || '—'}`)
-    if (status !== r.status) changes.push(`Estado: ${r.status}→${status}`)
+    if (finalStatus !== r.status) changes.push(`Estado: ${r.status}→${finalStatus}`)
     if ((email || null) !== r.email) changes.push('Email cambiado')
     if ((phone || null) !== r.phone) changes.push('Teléfono cambiado')
     if ((notes || null) !== r.notes) changes.push('Notas cambiadas')
     if (incidentType && incidentType !== (r.incident_type ?? '')) changes.push(`Incidencia: ${incidentType}`)
+    if (incidentResolution && incidentResolution !== (r.incident_resolution ?? '')) changes.push(`Solucion: ${incidentResolution}`)
     if (incidentComment && incidentComment !== (r.incident_comment ?? '')) changes.push('Comentario incidencia cambiado')
 
     logAudit({
@@ -527,7 +539,7 @@ function EditForm({
 
       {/* Incident section */}
       <div className="mt-3 pt-3 border-t border-gray-200">
-        <h4 className="text-xs font-semibold text-gray-700 mb-2">Incidencia (cambio de dia/hora)</h4>
+        <h4 className="text-xs font-semibold text-gray-700 mb-2">Incidencia</h4>
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2">
           <Field label="Tipo de incidencia">
             <select value={incidentType} onChange={(e) => setIncidentType(e.target.value)} className="input">
@@ -537,26 +549,58 @@ function EditForm({
               ))}
             </select>
           </Field>
+          {showDateChange && (
+            <Field label="Nuevo dia">
+              <input type="date" value={newDate} onChange={(e) => setNewDate(e.target.value)} className="input" />
+            </Field>
+          )}
           {hasIncident && (
-            <>
-              <Field label="Nuevo dia">
-                <input type="date" value={newDate} onChange={(e) => setNewDate(e.target.value)} className="input" />
+            <div className="col-span-full sm:col-span-2">
+              <Field label="Comentario incidencia">
+                <textarea
+                  value={incidentComment}
+                  onChange={(e) => setIncidentComment(e.target.value)}
+                  className="input"
+                  placeholder="Detalles de la incidencia..."
+                  rows={2}
+                  style={{ resize: 'vertical' }}
+                />
               </Field>
-              <div className="col-span-full sm:col-span-2">
-                <Field label="Comentario incidencia">
-                  <textarea
-                    value={incidentComment}
-                    onChange={(e) => setIncidentComment(e.target.value)}
-                    className="input"
-                    placeholder="Detalles de la incidencia..."
-                    rows={2}
-                    style={{ resize: 'vertical' }}
-                  />
-                </Field>
-              </div>
-            </>
+            </div>
           )}
         </div>
+        {hasIncident && (
+          <div className="mt-3">
+            <p className="text-xs font-semibold text-gray-700 mb-2">Solucion de la incidencia</p>
+            <div className="flex flex-wrap gap-2">
+              {INCIDENT_RESOLUTIONS.map((o) => {
+                const active = incidentResolution === o
+                return (
+                  <button
+                    key={o}
+                    type="button"
+                    onClick={() => setIncidentResolution(active ? '' : o)}
+                    className={`px-3 py-2 text-sm rounded-lg border font-medium min-h-[44px] sm:min-h-0 ${
+                      active
+                        ? 'bg-amber-600 border-amber-600 text-white'
+                        : 'bg-white border-gray-300 text-gray-700 hover:bg-amber-50 hover:border-amber-400'
+                    }`}
+                  >
+                    {o}
+                  </button>
+                )
+              })}
+            </div>
+            {isRefund && (
+              <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                Antes de procesar una devolucion, intenta ofrecer al cliente un cambio de dia o un vale.
+              </div>
+            )}
+            {isCancelling && (
+              <p className="mt-2 text-xs text-gray-600">Al guardar, la reserva quedara marcada como Cancelada.</p>
+            )}
+          </div>
+        )}
       </div>
 
       {error && <p className="text-sm text-red-600 mt-2">{error}</p>}

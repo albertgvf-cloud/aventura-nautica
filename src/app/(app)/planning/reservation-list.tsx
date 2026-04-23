@@ -27,6 +27,7 @@ type Reservation = {
   duration_minutes?: number | null
   incident_type?: string | null
   incident_comment?: string | null
+  incident_resolution?: string | null
 }
 
 type GroupedReservation = {
