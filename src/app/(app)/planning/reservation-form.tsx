@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { logAudit } from '@/lib/audit'
-import { OFFICES, STATUSES, TIME_SLOTS } from '@/lib/config'
+import { OFFICES, TIME_SLOTS } from '@/lib/config'
 
 type Activity = { name: string; capacity: number; hardMax: number; color: string }
 
@@ -33,7 +33,7 @@ export default function ReservationForm({
   const [phone, setPhone] = useState('')
   const [staff, setStaff] = useState('')
   const [office, setOffice] = useState('')
-  const [status, setStatus] = useState('Confirmada')
+  const status = 'Confirmada'
   const [notes, setNotes] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -161,18 +161,36 @@ export default function ReservationForm({
       <form onSubmit={handleSubmit} className={`${expanded ? 'block' : 'hidden'} sm:block mt-3 sm:mt-0`}>
         {/* Mobile: 1 column, sm: 2 columns, md: 5 columns, lg: full row */}
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 lg:grid-cols-9 gap-2 sm:gap-2">
-          <div>
-            <label className="block text-xs text-gray-500 mb-0.5">Actividad</label>
-            <select
-              value={activity}
-              onChange={(e) => setActivity(e.target.value)}
-              className="w-full px-2 py-2.5 sm:py-1.5 border border-gray-300 rounded-lg text-sm text-gray-900 outline-none focus:ring-2 focus:ring-sky-500 min-h-[44px] sm:min-h-0"
-            >
-              {activities.map((a) => (
-                <option key={a.name} value={a.name}>{a.name}</option>
-              ))}
-            </select>
-          </div>
+          {activities.length > 1 ? (
+            <div className="sm:col-span-2 md:col-span-2 lg:col-span-2">
+              <label className="block text-xs text-gray-500 mb-0.5">Actividad</label>
+              <div className="flex flex-wrap gap-1.5">
+                {activities.map((a) => {
+                  const isActive = activity === a.name
+                  return (
+                    <button
+                      key={a.name}
+                      type="button"
+                      onClick={() => setActivity(a.name)}
+                      className={`px-3 py-2 sm:py-1.5 text-sm rounded-lg border font-medium min-h-[44px] sm:min-h-0 whitespace-nowrap ${
+                        isActive ? 'text-white' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                      }`}
+                      style={isActive ? { backgroundColor: a.color, borderColor: a.color } : undefined}
+                    >
+                      {a.name}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          ) : (
+            <div>
+              <label className="block text-xs text-gray-500 mb-0.5">Actividad</label>
+              <div className="px-2 py-2.5 sm:py-1.5 border border-gray-200 rounded-lg text-sm text-gray-700 bg-gray-50 min-h-[44px] sm:min-h-0 flex items-center">
+                {activities[0]?.name ?? '--'}
+              </div>
+            </div>
+          )}
 
           <div>
             <label className="block text-xs text-gray-500 mb-0.5">Hora</label>
@@ -264,18 +282,6 @@ export default function ReservationForm({
             </select>
           </div>
 
-          <div>
-            <label className="block text-xs text-gray-500 mb-0.5">Estado</label>
-            <select
-              value={status}
-              onChange={(e) => setStatus(e.target.value)}
-              className="w-full px-2 py-2.5 sm:py-1.5 border border-gray-300 rounded-lg text-sm text-gray-900 outline-none focus:ring-2 focus:ring-sky-500 min-h-[44px] sm:min-h-0"
-            >
-              {STATUSES.map((s) => (
-                <option key={s} value={s}>{s}</option>
-              ))}
-            </select>
-          </div>
         </div>
 
         {/* Notes field */}
