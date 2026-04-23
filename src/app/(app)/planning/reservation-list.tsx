@@ -28,6 +28,8 @@ type Reservation = {
   incident_type?: string | null
   incident_comment?: string | null
   incident_resolution?: string | null
+  incident_refund_amount?: number | null
+  incident_refund_type?: string | null
 }
 
 type GroupedReservation = {

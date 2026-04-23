@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { logAudit } from '@/lib/audit'
-import { OFFICES, STATUSES, TIME_SLOTS, INCIDENT_TYPES, INCIDENT_RESOLUTIONS } from '@/lib/config'
+import { OFFICES, STATUSES, TIME_SLOTS, INCIDENT_TYPES, INCIDENT_RESOLUTIONS, REFUND_TYPES } from '@/lib/config'
 
 type Reservation = {
   id: string
@@ -23,6 +23,8 @@ type Reservation = {
   incident_type: string | null
   incident_comment: string | null
   incident_resolution: string | null
+  incident_refund_amount: number | null
+  incident_refund_type: string | null
 }
 
 export default function SlotModal({
@@ -270,7 +272,7 @@ function ReservationCard({
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
         <div className="flex items-start gap-2 sm:gap-3 flex-1 min-w-0">
           {/* Checkbox de llegada */}
-          {!isCancelled && (
+          {!isCancelled && !isEditing && (
             <input
               type="checkbox"
               checked={r.arrived}
@@ -279,65 +281,79 @@ function ReservationCard({
               title={r.arrived ? 'Llego — clic para desmarcar' : 'Marcar llegada'}
             />
           )}
-          <div className="flex-1 min-w-0 grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-x-3 gap-y-1.5 sm:gap-2 text-sm">
-            <div>
-              <span className="text-xs text-gray-500">Cliente</span>
-              <p className={`font-medium text-gray-900 ${isCancelled ? 'line-through' : ''}`}>{r.client_name}</p>
+          {isEditing ? (
+            <div className="flex-1 min-w-0">
+              <p className={`font-semibold text-gray-900 text-base ${isCancelled ? 'line-through' : ''}`}>{r.client_name}</p>
+              <p className="text-xs text-gray-500 mt-0.5">Edicion de reserva</p>
             </div>
-            <div>
-              <span className="text-xs text-gray-500">Teléfono</span>
-              <p className="text-gray-700">{r.phone ?? '--'}</p>
-            </div>
-            <div>
-              <span className="text-xs text-gray-500">Email</span>
-              <p className="text-gray-700 truncate">{r.email ?? '--'}</p>
-            </div>
-            <div>
-              <span className="text-xs text-gray-500">Personas</span>
-              <p className="font-semibold text-gray-900">{r.num_people}</p>
-            </div>
-            <div>
-              <span className="text-xs text-gray-500">Atendido por</span>
-              <p className="text-gray-700">{r.staff ?? '--'}</p>
-            </div>
-            <div>
-              <span className="text-xs text-gray-500">Oficina</span>
-              <p className="text-gray-700">{r.office ?? '--'}</p>
-            </div>
-            <div>
-              <span className="text-xs text-gray-500">Estado</span>
-              <p><StatusBadge status={r.status} /></p>
-            </div>
-            <div>
-              <span className="text-xs text-gray-500">Llegada</span>
-              <p className={r.arrived ? 'text-green-700 font-medium' : 'text-gray-400'}>
-                {r.arrived ? 'Llego' : 'Pendiente'}
-              </p>
-            </div>
-            {r.departed && !r.arrived && (
-              <div className="col-span-full">
-                <p className="text-sm text-amber-700 font-medium">
-                  La actividad salio sin este cliente -- usa &quot;Editar&quot; para cambiar la hora y reubicarlo
+          ) : (
+            <div className="flex-1 min-w-0 grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-x-3 gap-y-1.5 sm:gap-2 text-sm">
+              <div>
+                <span className="text-xs text-gray-500">Cliente</span>
+                <p className={`font-medium text-gray-900 ${isCancelled ? 'line-through' : ''}`}>{r.client_name}</p>
+              </div>
+              <div>
+                <span className="text-xs text-gray-500">Teléfono</span>
+                <p className="text-gray-700">{r.phone ?? '--'}</p>
+              </div>
+              <div>
+                <span className="text-xs text-gray-500">Email</span>
+                <p className="text-gray-700 truncate">{r.email ?? '--'}</p>
+              </div>
+              <div>
+                <span className="text-xs text-gray-500">Personas</span>
+                <p className="font-semibold text-gray-900">{r.num_people}</p>
+              </div>
+              <div>
+                <span className="text-xs text-gray-500">Atendido por</span>
+                <p className="text-gray-700">{r.staff ?? '--'}</p>
+              </div>
+              <div>
+                <span className="text-xs text-gray-500">Oficina</span>
+                <p className="text-gray-700">{r.office ?? '--'}</p>
+              </div>
+              <div>
+                <span className="text-xs text-gray-500">Estado</span>
+                <p><StatusBadge status={r.status} /></p>
+              </div>
+              <div>
+                <span className="text-xs text-gray-500">Llegada</span>
+                <p className={r.arrived ? 'text-green-700 font-medium' : 'text-gray-400'}>
+                  {r.arrived ? 'Llego' : 'Pendiente'}
                 </p>
               </div>
-            )}
-            {r.incident_type && (
-              <div className="col-span-full">
-                <span className="text-xs text-gray-500">Incidencia</span>
-                <p className="text-amber-700 font-medium">{r.incident_type}</p>
-                {r.incident_resolution && (
-                  <p className="text-amber-800 text-xs mt-0.5">Solucion: {r.incident_resolution}</p>
-                )}
-                {r.incident_comment && <p className="text-gray-600 text-xs mt-0.5">{r.incident_comment}</p>}
-              </div>
-            )}
-            {r.notes && (
-              <div className="col-span-full">
-                <span className="text-xs text-gray-500">Notas</span>
-                <p className="text-gray-700">{r.notes}</p>
-              </div>
-            )}
-          </div>
+              {r.departed && !r.arrived && (
+                <div className="col-span-full">
+                  <p className="text-sm text-amber-700 font-medium">
+                    La actividad salio sin este cliente -- usa &quot;Detalle&quot; para cambiar la hora y reubicarlo
+                  </p>
+                </div>
+              )}
+              {r.incident_type && (
+                <div className="col-span-full">
+                  <span className="text-xs text-gray-500">Incidencia</span>
+                  <p className="text-amber-700 font-medium">{r.incident_type}</p>
+                  {r.incident_resolution && (
+                    <p className="text-amber-800 text-xs mt-0.5">
+                      Solucion: {r.incident_resolution}
+                      {r.incident_refund_amount != null && (
+                        <> · {r.incident_refund_amount}€
+                          {r.incident_refund_type ? ` (${r.incident_refund_type})` : ''}
+                        </>
+                      )}
+                    </p>
+                  )}
+                  {r.incident_comment && <p className="text-gray-600 text-xs mt-0.5">{r.incident_comment}</p>}
+                </div>
+              )}
+              {r.notes && (
+                <div className="col-span-full">
+                  <span className="text-xs text-gray-500">Notas</span>
+                  <p className="text-gray-700">{r.notes}</p>
+                </div>
+              )}
+            </div>
+          )}
         </div>
         {/* Action buttons - horizontal on mobile, vertical on desktop */}
         <div className="flex flex-row sm:flex-col gap-1.5 sm:gap-1 shrink-0 overflow-x-auto">
@@ -394,14 +410,21 @@ function EditForm({
   const [incidentType, setIncidentType] = useState(r.incident_type ?? '')
   const [incidentComment, setIncidentComment] = useState(r.incident_comment ?? '')
   const [incidentResolution, setIncidentResolution] = useState(r.incident_resolution ?? '')
+  const [refundAmount, setRefundAmount] = useState<string>(
+    r.incident_refund_amount != null ? String(r.incident_refund_amount) : ''
+  )
+  const [refundType, setRefundType] = useState(r.incident_refund_type ?? '')
   const [newDate, setNewDate] = useState(date)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const hasIncident = incidentType !== ''
   const showDateChange = hasIncident && incidentResolution === 'Cambio de dia'
+  const showPeopleChange = hasIncident && incidentResolution === 'Modificar n pers'
+  const isVoucher = hasIncident && incidentResolution === 'Cancelar + generar vale'
   const isRefund = hasIncident && incidentResolution === 'Cancelar + devolucion'
-  const isCancelling = hasIncident && (incidentResolution === 'Cancelar + generar vale' || incidentResolution === 'Cancelar + devolucion')
+  const isCancelling = isVoucher || isRefund
+  const showAmount = showPeopleChange || isVoucher || isRefund
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault()
@@ -409,12 +432,15 @@ function EditForm({
     setError(null)
 
     const finalStatus = isCancelling ? 'Cancelada' : status
+    // num_people is only editable via "Modificar n pers" incident resolution
+    const finalNumPeople = showPeopleChange ? numPeople : r.num_people
+    const parsedAmount = refundAmount.trim() === '' ? null : Number(refundAmount)
 
     const updateData: Record<string, unknown> = {
       client_name: clientName.trim(),
       email: email || null,
       phone: phone || null,
-      num_people: numPeople,
+      num_people: finalNumPeople,
       time: time + ':00',
       staff: staff || null,
       office: office || null,
@@ -423,6 +449,8 @@ function EditForm({
       incident_type: incidentType || null,
       incident_comment: incidentComment || null,
       incident_resolution: hasIncident ? (incidentResolution || null) : null,
+      incident_refund_amount: hasIncident && showAmount ? parsedAmount : null,
+      incident_refund_type: showPeopleChange ? (refundType || null) : null,
     }
 
     // Only include date change if resolution calls for it
@@ -446,7 +474,7 @@ function EditForm({
     if (clientName.trim() !== r.client_name) changes.push(`Nombre: ${r.client_name}→${clientName.trim()}`)
     if (showDateChange && newDate !== date) changes.push(`Fecha: ${date}→${newDate}`)
     if (time !== (r.time?.slice(0, 5) ?? '')) changes.push(`Hora: ${r.time?.slice(0, 5)}→${time}`)
-    if (numPeople !== r.num_people) changes.push(`Personas: ${r.num_people}→${numPeople}`)
+    if (showPeopleChange && numPeople !== r.num_people) changes.push(`Personas: ${r.num_people}→${numPeople}`)
     if ((staff || null) !== r.staff) changes.push(`Staff: ${r.staff ?? '—'}→${staff || '—'}`)
     if ((office || null) !== r.office) changes.push(`Oficina: ${r.office ?? '—'}→${office || '—'}`)
     if (finalStatus !== r.status) changes.push(`Estado: ${r.status}→${finalStatus}`)
@@ -481,7 +509,14 @@ function EditForm({
           <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="input" />
         </Field>
         <Field label="N Personas">
-          <input type="number" min={1} value={numPeople} onChange={(e) => setNumPeople(Number(e.target.value))} className="input" />
+          <input
+            type="number"
+            min={1}
+            value={r.num_people}
+            disabled
+            className="input bg-gray-100 text-gray-500 cursor-not-allowed"
+            title="Para modificar, usa una incidencia con resolucion 'Modificar n pers'"
+          />
         </Field>
         <Field label="Hora">
           <select value={time} onChange={(e) => setTime(e.target.value)} className="input">
@@ -590,6 +625,53 @@ function EditForm({
             )}
             {isCancelling && (
               <p className="mt-2 text-xs text-gray-600">Al guardar, la reserva quedara marcada como Cancelada.</p>
+            )}
+            {showPeopleChange && (
+              <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <Field label="Nuevo n personas">
+                  <input
+                    type="number"
+                    min={1}
+                    value={numPeople}
+                    onChange={(e) => setNumPeople(Number(e.target.value))}
+                    className="input"
+                  />
+                </Field>
+                <Field label="Importe (€)">
+                  <input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={refundAmount}
+                    onChange={(e) => setRefundAmount(e.target.value)}
+                    className="input"
+                    placeholder="0.00"
+                  />
+                </Field>
+                <Field label="Tipo">
+                  <select value={refundType} onChange={(e) => setRefundType(e.target.value)} className="input">
+                    <option value="">--</option>
+                    {REFUND_TYPES.map((t) => (
+                      <option key={t} value={t}>{t}</option>
+                    ))}
+                  </select>
+                </Field>
+              </div>
+            )}
+            {(isVoucher || isRefund) && (
+              <div className="mt-3">
+                <Field label={isVoucher ? 'Importe del vale (€)' : 'Importe a devolver (€)'}>
+                  <input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={refundAmount}
+                    onChange={(e) => setRefundAmount(e.target.value)}
+                    className="input sm:max-w-xs"
+                    placeholder="0.00"
+                  />
+                </Field>
+              </div>
             )}
           </div>
         )}
