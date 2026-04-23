@@ -65,7 +65,7 @@ export default function PlanningView({
 }) {
   const router = useRouter()
   const [activeTab, setActiveTab] = useState(tab)
-  const [modal, setModal] = useState<{ slot: string; activityName: string } | null>(null)
+  const [modal, setModal] = useState<{ slot: string; activityName: string; reservationId?: string } | null>(null)
 
   const activeReservations = reservations.filter(
     (r) => r.activity_type === activeTab && r.status !== 'Cancelada'
@@ -92,8 +92,8 @@ export default function PlanningView({
     router.push(`/planning?date=${date}&tab=${tabId}`, { scroll: false })
   }
 
-  function handleSlotClick(slot: string, activityName: string) {
-    setModal({ slot, activityName })
+  function handleSlotClick(slot: string, activityName: string, reservationId?: string) {
+    setModal({ slot, activityName, reservationId })
   }
 
   // Format date nicely
@@ -233,6 +233,7 @@ export default function PlanningView({
           date={date}
           reservations={modalReservations}
           staffNames={staffNames}
+          initialEditingId={modal.reservationId}
           onClose={() => setModal(null)}
         />
       )}

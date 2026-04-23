@@ -25,7 +25,7 @@ export default function TimeGrid({
   activities: Activity[]
   reservations: Reservation[]
   timeSlots: string[]
-  onSlotClick: (slot: string, activityName: string) => void
+  onSlotClick: (slot: string, activityName: string, reservationId?: string) => void
 }) {
   const supabase = createClient()
   const router = useRouter()
@@ -107,7 +107,7 @@ export default function TimeGrid({
                 {r.arrived ? '✓ Llegado' : 'Llegado'}
               </button>
               <button
-                onClick={() => onSlotClick(slot, activityName)}
+                onClick={() => onSlotClick(slot, activityName, r.id)}
                 className="text-xs px-2.5 py-1 rounded-lg whitespace-nowrap font-medium border border-sky-300 text-sky-700 hover:bg-sky-50"
               >
                 Detalle

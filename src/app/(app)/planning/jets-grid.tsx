@@ -66,7 +66,7 @@ export default function JetsGrid({
   reservations, onSlotClick, staffNames, date,
 }: {
   reservations: Reservation[]
-  onSlotClick: (slot: string, activityName: string) => void
+  onSlotClick: (slot: string, activityName: string, reservationId?: string) => void
   staffNames: string[]
   date: string
 }) {

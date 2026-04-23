@@ -36,6 +36,7 @@ export default function SlotModal({
   date,
   reservations,
   staffNames,
+  initialEditingId,
   onClose,
 }: {
   slot: string
@@ -46,11 +47,12 @@ export default function SlotModal({
   date: string
   reservations: Reservation[]
   staffNames: string[]
+  initialEditingId?: string
   onClose: () => void
 }) {
   const router = useRouter()
   const supabase = createClient()
-  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editingId, setEditingId] = useState<string | null>(initialEditingId ?? null)
   const [showAddForm, setShowAddForm] = useState(false)
 
   const active = reservations.filter((r) => r.status !== 'Cancelada')
