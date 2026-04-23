@@ -625,22 +625,8 @@ function EditForm({
               ))}
             </select>
           </Field>
-          {showDateChange && (
-            <>
-              <Field label="Nuevo dia">
-                <input type="date" value={newDate} onChange={(e) => setNewDate(e.target.value)} className="input" />
-              </Field>
-              <Field label="Nueva hora">
-                <select value={time} onChange={(e) => setTime(e.target.value)} className="input">
-                  {TIME_SLOTS.map((t) => (
-                    <option key={t} value={t}>{t}</option>
-                  ))}
-                </select>
-              </Field>
-            </>
-          )}
           {hasIncident && (
-            <div className="col-span-full sm:col-span-2">
+            <div className="col-span-full sm:col-span-3">
               <Field label="Comentario incidencia">
                 <textarea
                   value={incidentComment}
@@ -654,9 +640,59 @@ function EditForm({
             </div>
           )}
         </div>
+
+        {/* Step 1: affected scope (shows as soon as incident type is set) */}
+        {hasIncident && canSplit && (
+          <div className="mt-3">
+            <p className="text-xs font-semibold text-gray-700 mb-2">
+              1. ¿A cuantas {unitLabel} afecta la incidencia?
+            </p>
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                type="button"
+                onClick={() => setAffected(r.num_people)}
+                className={`px-3 py-2 text-sm rounded-lg border font-medium min-h-[44px] sm:min-h-0 ${
+                  affected === r.num_people
+                    ? 'bg-sky-600 border-sky-600 text-white'
+                    : 'bg-white border-gray-300 text-gray-700 hover:bg-sky-50'
+                }`}
+              >
+                Toda la reserva ({r.num_people} {unitLabel})
+              </button>
+              <button
+                type="button"
+                onClick={() => setAffected(Math.max(1, r.num_people - 1))}
+                className={`px-3 py-2 text-sm rounded-lg border font-medium min-h-[44px] sm:min-h-0 ${
+                  affected < r.num_people
+                    ? 'bg-sky-600 border-sky-600 text-white'
+                    : 'bg-white border-gray-300 text-gray-700 hover:bg-sky-50'
+                }`}
+              >
+                Parcial
+              </button>
+              {affected < r.num_people && (
+                <div className="flex items-center gap-1">
+                  <input
+                    type="number"
+                    min={1}
+                    max={r.num_people - 1}
+                    value={affected}
+                    onChange={(e) => setAffected(Math.max(1, Math.min(r.num_people - 1, Number(e.target.value))))}
+                    className="input w-20"
+                  />
+                  <span className="text-sm text-gray-600">de {r.num_people} {unitLabel}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Step 2: resolution */}
         {hasIncident && (
           <div className="mt-3">
-            <p className="text-xs font-semibold text-gray-700 mb-2">Solucion de la incidencia</p>
+            <p className="text-xs font-semibold text-gray-700 mb-2">
+              {canSplit ? '2. ' : ''}Solucion de la incidencia
+            </p>
             <div className="flex flex-wrap gap-2">
               {INCIDENT_RESOLUTIONS.map((o) => {
                 const active = incidentResolution === o
@@ -683,17 +719,19 @@ function EditForm({
             )}
             {incidentResolution && (
               <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2">
-                {canSplit && (
-                  <Field label={`${isJets ? 'Motos' : 'Personas'} afectadas (de ${r.num_people})`}>
-                    <input
-                      type="number"
-                      min={1}
-                      max={r.num_people}
-                      value={affected}
-                      onChange={(e) => setAffected(Number(e.target.value))}
-                      className="input"
-                    />
-                  </Field>
+                {showDateChange && (
+                  <>
+                    <Field label="Nuevo dia">
+                      <input type="date" value={newDate} onChange={(e) => setNewDate(e.target.value)} className="input" />
+                    </Field>
+                    <Field label="Nueva hora">
+                      <select value={time} onChange={(e) => setTime(e.target.value)} className="input">
+                        {TIME_SLOTS.map((t) => (
+                          <option key={t} value={t}>{t}</option>
+                        ))}
+                      </select>
+                    </Field>
+                  </>
                 )}
                 {showAmount && (
                   <Field label={isVoucher ? 'Importe del vale (€)' : 'Importe a devolver (€)'}>
