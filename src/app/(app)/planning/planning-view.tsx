@@ -214,9 +214,9 @@ export default function PlanningView({
       {isJets ? (
         <JetsGrid reservations={allForTab} onSlotClick={handleSlotClick} staffNames={staffNames} date={date} />
       ) : isParasailing ? (
-        <ParasailingGrid reservations={allForTab} onSlotClick={handleSlotClick} />
+        <ParasailingGrid reservations={allForTab} onSlotClick={handleSlotClick} date={date} />
       ) : (
-        <TimeGrid activities={activities} reservations={allForTab} timeSlots={TIME_SLOTS} onSlotClick={handleSlotClick} />
+        <TimeGrid activities={activities} reservations={allForTab} timeSlots={TIME_SLOTS} onSlotClick={handleSlotClick} date={date} />
       )}
 
       {/* Reservation list (detail) */}

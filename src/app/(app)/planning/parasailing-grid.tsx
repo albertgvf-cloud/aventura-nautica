@@ -28,13 +28,16 @@ type Reservation = {
 export default function ParasailingGrid({
   reservations,
   onSlotClick,
+  date,
 }: {
   reservations: Reservation[]
   onSlotClick: (slot: string, activityName: string, reservationId?: string) => void
+  date: string
 }) {
   const supabase = createClient()
   const router = useRouter()
   const [expandedBlock, setExpandedBlock] = useState<string | null>(null)
+  const [viewMode, setViewMode] = useState<'timeline' | 'list'>('timeline')
 
   function getBlockData(slot: string) {
     const blockReservations = reservations.filter(
@@ -142,6 +145,55 @@ export default function ParasailingGrid({
 
   return (
     <div className="space-y-2">
+      {/* View mode toggle */}
+      <div className="flex items-center justify-between flex-wrap gap-2 no-print">
+        <div className="flex gap-1 bg-gray-100 p-1 rounded-xl">
+          <button
+            type="button"
+            onClick={() => setViewMode('timeline')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+              viewMode === 'timeline' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600'
+            }`}
+          >
+            📊 Parrilla
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode('list')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+              viewMode === 'list' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600'
+            }`}
+          >
+            📄 Lista A4
+          </button>
+        </div>
+        {viewMode === 'list' && (
+          <button
+            type="button"
+            onClick={() => window.print()}
+            className="px-3 py-1.5 bg-sky-600 hover:bg-sky-700 text-white rounded-lg text-xs font-medium"
+          >
+            🖨️ Imprimir
+          </button>
+        )}
+      </div>
+
+      {viewMode === 'list' && (
+        <ParasailingPrintView reservations={reservations} date={date} />
+      )}
+
+      <style jsx global>{`
+        @media print {
+          @page { size: A4 landscape; margin: 8mm; }
+          body * { visibility: hidden !important; }
+          .print-area, .print-area * { visibility: visible !important; }
+          .print-area { position: absolute; left: 0; top: 0; width: 100%; }
+          .no-print { display: none !important; }
+        }
+      `}</style>
+
+      {viewMode === 'timeline' && (
+      <>
       {/* Legend */}
       <div className="bg-purple-50 border border-purple-200 rounded-xl p-3 sm:p-4 text-xs sm:text-sm text-purple-800">
         <div className="flex flex-wrap gap-x-4 gap-y-1">
@@ -454,6 +506,84 @@ export default function ParasailingGrid({
           </div>
         </div>
       </div>
+      </>
+      )}
+    </div>
+  )
+}
+
+function ParasailingPrintView({ reservations, date }: { reservations: Reservation[]; date: string }) {
+  const dateObj = new Date(date + 'T00:00:00')
+  const dayNames = ['Domingo', 'Lunes', 'Martes', 'Miercoles', 'Jueves', 'Viernes', 'Sabado']
+  const monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
+  const dateLabel = `${dayNames[dateObj.getDay()]}, ${dateObj.getDate()} ${monthNames[dateObj.getMonth()]} ${dateObj.getFullYear()}`
+  const active = reservations.filter((r) => r.status !== 'Cancelada' && r.activity === 'Parasailing')
+
+  function slotRes(slot: string) {
+    return active.filter((r) => r.time?.slice(0, 5) === slot)
+  }
+
+  // Only slots with bookings
+  const usedSlots = PARASAILING_SLOTS.filter((s) => slotRes(s).length > 0)
+  const totalPeople = active.reduce((s, r) => s + r.num_people, 0)
+
+  return (
+    <div className="print-area bg-white rounded-xl border border-gray-200 p-3 text-[11px]">
+      <div className="flex items-end justify-between border-b-2 border-gray-900 pb-2 mb-2">
+        <div>
+          <h2 className="text-base font-bold text-gray-900">Planning Parasailing</h2>
+          <p className="text-[11px] text-gray-600">{dateLabel}</p>
+        </div>
+        <p className="text-[10px] text-gray-600">
+          {active.length} reservas · {totalPeople} personas · {usedSlots.length} salidas con reservas
+        </p>
+      </div>
+
+      {usedSlots.length === 0 ? (
+        <p className="text-center text-gray-500 py-6 text-sm">Sin reservas este dia.</p>
+      ) : (
+        <table className="w-full border-collapse" style={{ tableLayout: 'fixed' }}>
+          <thead>
+            <tr className="border-b-2 border-gray-800 bg-gray-50 text-left">
+              <th className="px-1.5 py-1 font-bold text-[11px]" style={{ width: 60 }}>Salida</th>
+              <th className="px-1.5 py-1 font-bold text-[11px]" style={{ width: 70 }}>Ocupación</th>
+              <th className="px-1.5 py-1 font-bold text-[11px]">Clientes (personas)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {usedSlots.map((slot) => {
+              const rs = slotRes(slot)
+              const people = rs.reduce((s, r) => s + r.num_people, 0)
+              const cap = slot === '08:30' ? 4 : PARASAILING.maxPerDeparture
+              const over = people > cap
+              return (
+                <tr key={slot} className="border-b border-gray-200 align-top">
+                  <td className="px-1.5 py-1 font-mono font-bold border-r border-gray-300">{slot}</td>
+                  <td className="px-1.5 py-1 border-r border-gray-300">
+                    <span
+                      className={`inline-block px-1 rounded text-white font-bold text-[10px] ${
+                        over ? 'bg-red-500' : people >= cap * 0.8 ? 'bg-amber-500' : 'bg-purple-600'
+                      }`}
+                    >
+                      {people}/{cap}
+                      {over && ' ⚠'}
+                    </span>
+                  </td>
+                  <td className="px-1.5 py-1 text-[10px] text-gray-800 leading-tight">
+                    {rs.map((r, i) => (
+                      <span key={r.id}>
+                        {i > 0 && <span className="text-gray-400"> · </span>}
+                        <span className="font-semibold">{r.client_name}</span>
+                        <span className="text-gray-500"> ({r.num_people})</span>
+                      </span>
+                    ))}
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      )}
     </div>
   )
 }
