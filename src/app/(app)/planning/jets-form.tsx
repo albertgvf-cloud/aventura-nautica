@@ -64,7 +64,7 @@ export default function JetsForm({
   }
 
   // Fleet depends on category
-  const fleet = category === 'sin' ? ALL_SIN_TIT_JETS : [...ALL_SIN_TIT_JETS, ...ALL_CON_TIT_JETS]
+  const fleet = category === 'sin' ? ALL_SIN_TIT_JETS : ALL_CON_TIT_JETS
   const availableJets = useMemo(() => getAvailableJets(time, duration, fleet), [time, duration, category, active])
 
   // Group available jets by model
