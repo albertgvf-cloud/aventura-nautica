@@ -639,24 +639,24 @@ function JetsPrintTimeline({
   // Only render VX rows that have bookings
   const usedVXRows = virtualVXRows.map((bookings, i) => ({ bookings, i })).filter(({ bookings }) => bookings.length > 0)
 
-  // Peak instructor count per hour (VX excursiones + circuitos only, ratio 1 instructor per N jets)
+  // Peak instructor count per 15-min slot (VX excursiones + circuitos only, ratio 1 instructor per N jets)
   const sinTitActive = reservations.filter(
     (r) => r.activity.startsWith('Excursion') || r.activity.startsWith('Circuito')
   )
-  const instructorByHour: { hour: number; count: number }[] = []
-  for (const h of hours.slice(0, -1)) {
+  const instructorSlots: { startMinute: number; count: number }[] = []
+  for (let m = startMin; m < endMin; m += 15) {
     let peak = 0
-    for (let m = h * 60; m < (h + 1) * 60; m += 10) {
+    for (let mm = m; mm < m + 15; mm += 5) {
       let jetsActive = 0
       for (const r of sinTitActive) {
         const rs = timeToMinutes(r.time?.slice(0, 5) ?? '00:00')
         const re = rs + (r.duration_minutes ?? 60)
-        if (m >= rs && m < re) jetsActive++
+        if (mm >= rs && mm < re) jetsActive++
       }
       const needed = Math.ceil(jetsActive / JETS.sinTitulacion.instructorRatio)
       if (needed > peak) peak = needed
     }
-    instructorByHour.push({ hour: h, count: peak })
+    instructorSlots.push({ startMinute: m, count: peak })
   }
 
   const dateObj = new Date(date + 'T00:00:00')
@@ -761,21 +761,27 @@ function JetsPrintTimeline({
               {hours.slice(0, -1).map((h) => (
                 <div key={h} className="absolute top-0 h-full border-l border-gray-300" style={{ left: px(h * 60) }} />
               ))}
-              {instructorByHour.map(({ hour, count }) => (
-                <div
-                  key={hour}
-                  className={`absolute top-0.5 bottom-0.5 flex items-center justify-center text-[10px] font-bold rounded ${
-                    count === 0 ? 'text-gray-300' :
-                    count >= 3 ? 'bg-red-200 text-red-900' :
-                    count >= 2 ? 'bg-amber-200 text-amber-900' :
-                    'bg-blue-200 text-blue-900'
-                  }`}
-                  style={{ left: px(hour * 60) + 2, width: PX_PER_HOUR_PRINT - 4 }}
-                  title={`${count} monitor${count !== 1 ? 'es' : ''} necesario${count !== 1 ? 's' : ''} a las ${hour}:00`}
-                >
-                  {count || '·'}
-                </div>
-              ))}
+              {instructorSlots.map(({ startMinute, count }) => {
+                const slotW = PX_PER_HOUR_PRINT / 4
+                const hh = Math.floor(startMinute / 60)
+                const mm = startMinute % 60
+                const timeLabel = `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`
+                return (
+                  <div
+                    key={startMinute}
+                    className={`absolute top-0.5 bottom-0.5 flex items-center justify-center text-[9px] font-bold ${
+                      count === 0 ? 'text-gray-300' :
+                      count >= 3 ? 'bg-red-200 text-red-900' :
+                      count >= 2 ? 'bg-amber-200 text-amber-900' :
+                      'bg-blue-200 text-blue-900'
+                    }`}
+                    style={{ left: px(startMinute), width: slotW }}
+                    title={`${count} monitor${count !== 1 ? 'es' : ''} a las ${timeLabel}`}
+                  >
+                    {count || ''}
+                  </div>
+                )
+              })}
             </div>
           </div>
         </div>
