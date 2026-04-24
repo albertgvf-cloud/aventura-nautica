@@ -227,35 +227,51 @@ export default function JetsGrid({
   }
 
   // ===== VIRTUAL ROW ASSIGNMENT FOR VX (pool mode) =====
-  // All 16 VX rows shown. Reservations distributed for max efficiency:
-  // - Same time (±15 min): excursions grouped together, circuits grouped together
-  // - Different times: fill gaps in existing rows (reuse jets)
+  // All 16 VX rows shown. Order matches the desired visual grouping:
+  //   1. Reservations within 15 min of each other form a "cluster".
+  //   2. Inside a cluster: excursions before circuits.
+  //   3. Inside a type: longest duration first (1h before 30min).
+  //   4. Inside a duration: by departure time, then client.
+  // Each booking is placed in the topmost row where it fits.
   function buildVirtualRows(): Reservation[][] {
     const totalVX = ALL_SIN_TIT_JETS.length
     const rows: Reservation[][] = Array.from({ length: totalVX }, () => [])
 
     const vxRes = active.filter((r) => ALL_SIN_TIT_JETS.some((j) => j.id === r.jet_id))
 
-    // Sort: by time bucket (15 min), then excursions before circuits,
-    // then by client name (keep same client's jets together), then duration desc
-    const sorted = [...vxRes].sort((a, b) => {
+    // Greedy cluster: reservations are in the same cluster while each one starts
+    // within 15 min of the cluster's first reservation.
+    const byTime = [...vxRes].sort((a, b) => {
       const tA = timeToMinutes(a.time?.slice(0, 5) ?? '09:00')
       const tB = timeToMinutes(b.time?.slice(0, 5) ?? '09:00')
-      const bucketA = Math.floor(tA / 15)
-      const bucketB = Math.floor(tB / 15)
-      if (bucketA !== bucketB) return bucketA - bucketB
-      // Same time bucket: excursions first
+      return tA - tB
+    })
+    const cluster = new Map<string, number>()
+    let clusterIdx = -1
+    let clusterStart = -Infinity
+    for (const r of byTime) {
+      const t = timeToMinutes(r.time?.slice(0, 5) ?? '09:00')
+      if (t - clusterStart > 15) {
+        clusterIdx++
+        clusterStart = t
+      }
+      cluster.set(r.id, clusterIdx)
+    }
+
+    const sorted = [...vxRes].sort((a, b) => {
+      const cA = cluster.get(a.id) ?? 0
+      const cB = cluster.get(b.id) ?? 0
+      if (cA !== cB) return cA - cB
       const isExcA = a.activity.startsWith('Excursion') ? 0 : 1
       const isExcB = b.activity.startsWith('Excursion') ? 0 : 1
       if (isExcA !== isExcB) return isExcA - isExcB
-      // Same type: group by client name
-      const nameComp = a.client_name.localeCompare(b.client_name)
-      if (nameComp !== 0) return nameComp
-      // Same client: longest duration first
       const durA = a.duration_minutes ?? 60
       const durB = b.duration_minutes ?? 60
       if (durA !== durB) return durB - durA
-      return tA - tB
+      const tA = timeToMinutes(a.time?.slice(0, 5) ?? '09:00')
+      const tB = timeToMinutes(b.time?.slice(0, 5) ?? '09:00')
+      if (tA !== tB) return tA - tB
+      return a.client_name.localeCompare(b.client_name)
     })
 
     function fitsInRow(rowIdx: number, rStart: number, rEnd: number): boolean {
@@ -266,86 +282,18 @@ export default function JetsGrid({
       })
     }
 
-    function rowHasSameTypeSameTime(rowIdx: number, isExcursion: boolean, timeBucket: number): boolean {
-      return rows[rowIdx].some((b) => {
-        const bIsExc = b.activity.startsWith('Excursion')
-        const bBucket = Math.floor(timeToMinutes(b.time?.slice(0, 5) ?? '09:00') / 15)
-        return bIsExc === isExcursion && bBucket === timeBucket
-      })
-    }
-
     for (const r of sorted) {
       const rStart = timeToMinutes(r.time?.slice(0, 5) ?? '09:00')
       const rEnd = rStart + (r.duration_minutes ?? 60)
-      const isExcursion = r.activity.startsWith('Excursion')
-      const timeBucket = Math.floor(rStart / 15)
-
-      // Find all rows where this reservation fits
-      const candidates: number[] = []
+      let placed = false
       for (let i = 0; i < totalVX; i++) {
-        if (fitsInRow(i, rStart, rEnd)) candidates.push(i)
-      }
-
-      if (candidates.length === 0) {
-        // Fallback (shouldn't happen with 16 rows)
-        rows[totalVX - 1].push(r)
-        continue
-      }
-
-      // Priority 1: row that has same client at same time (keep Lola's jets together)
-      const sameClient = candidates.find((i) =>
-        rows[i].some((b) => b.client_name === r.client_name && Math.floor(timeToMinutes(b.time?.slice(0, 5) ?? '09:00') / 15) === timeBucket)
-      )
-      if (sameClient !== undefined) {
-        rows[sameClient].push(r)
-        continue
-      }
-
-      // Priority 2: adjacent row to same client (next row after last row with this client)
-      const lastClientRow = (() => {
-        for (let i = totalVX - 1; i >= 0; i--) {
-          if (rows[i].some((b) => b.client_name === r.client_name)) return i
+        if (fitsInRow(i, rStart, rEnd)) {
+          rows[i].push(r)
+          placed = true
+          break
         }
-        return -1
-      })()
-      if (lastClientRow >= 0) {
-        const adjacent = candidates.find((i) => i === lastClientRow + 1)
-        if (adjacent !== undefined) { rows[adjacent].push(r); continue }
       }
-
-      // Priority 3: row that has same-type bookings at the same time (excursions together)
-      const sameTypeTime = candidates.find((i) => rowHasSameTypeSameTime(i, isExcursion, timeBucket))
-      if (sameTypeTime !== undefined) {
-        rows[sameTypeTime].push(r)
-        continue
-      }
-
-      // Priority 4: row that already has bookings (fill gaps for efficiency)
-      // Prefer the row with the most bookings (busiest jet = most efficient)
-      const busyRows = candidates
-        .filter((i) => rows[i].length > 0)
-        .sort((a, b) => rows[b].length - rows[a].length)
-
-      if (busyRows.length > 0) {
-        rows[busyRows[0]].push(r)
-        continue
-      }
-
-      // Priority 5: empty row adjacent to last used row of same type
-      const lastSameTypeRow = (() => {
-        for (let i = totalVX - 1; i >= 0; i--) {
-          if (rows[i].some((b) => b.activity.startsWith('Excursion') === isExcursion)) return i
-        }
-        return -1
-      })()
-
-      if (lastSameTypeRow >= 0) {
-        const nextRow = candidates.find((i) => i === lastSameTypeRow + 1)
-        if (nextRow !== undefined) { rows[nextRow].push(r); continue }
-      }
-
-      // Otherwise first empty candidate
-      rows[candidates[0]].push(r)
+      if (!placed) rows[totalVX - 1].push(r) // overflow fallback
     }
 
     return rows
