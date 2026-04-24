@@ -23,6 +23,7 @@ type Reservation = {
   incident_refund_amount: number | null
   incident_resolved_by: string | null
   incident_authorized_by: string | null
+  duration_minutes: number | null
   created_at: string
 }
 
@@ -78,6 +79,24 @@ export default async function DashboardPage({
 
   const totalPeople = peopleIn(active)
   const totalMotos = jetsRes.length
+
+  // Jets breakdown by duration + by category
+  const jetsByDuration = new Map<number, number>()
+  for (const r of jetsRes) {
+    const d = r.duration_minutes ?? 60
+    jetsByDuration.set(d, (jetsByDuration.get(d) ?? 0) + 1)
+  }
+  const jetsDurationList = Array.from(jetsByDuration.entries()).sort((a, b) => a[0] - b[0])
+  const jetsExcursion = jetsRes.filter((r) => r.activity.startsWith('Excursion')).length
+  const jetsCircuito = jetsRes.filter((r) => r.activity.startsWith('Circuito')).length
+  const jetsConTit = jetsRes.length - jetsExcursion - jetsCircuito
+
+  function durationLabelShort(mins: number): string {
+    if (mins < 60) return `${mins}min`
+    const h = Math.floor(mins / 60)
+    const m = mins % 60
+    return m ? `${h}h${m}m` : `${h}h`
+  }
 
   // By activity name (for nautic breakdown)
   const byActivity: Record<string, { people: number; capacity: number; color: string }> = {}
@@ -190,7 +209,15 @@ export default async function DashboardPage({
           value={String(totalPeople)}
           hint={`${active.length} reservas activas`}
         />
-        <StatCard label="Motos reservadas" value={String(totalMotos)} hint={`${peopleIn(jetsRes)} personas`} />
+        <StatCard
+          label="Motos reservadas"
+          value={String(totalMotos)}
+          hint={
+            jetsDurationList.length > 0
+              ? jetsDurationList.map(([d, c]) => `${c}×${durationLabelShort(d)}`).join(' · ')
+              : '—'
+          }
+        />
         <StatCard
           label="Devoluciones del día"
           value={`${refundTotal.toFixed(2)}€`}
@@ -239,12 +266,32 @@ export default async function DashboardPage({
             sub={`${parasailingRes.length} reservas`}
             color="#8b5cf6"
           />
-          <MiniStat
-            label="Jets (motos)"
-            value={String(totalMotos)}
-            sub={`${peopleIn(jetsRes)} personas`}
-            color="#3b82f6"
-          />
+        </div>
+      </Section>
+
+      {/* Jets por duración */}
+      <Section title="Jets">
+        <div className="flex flex-wrap gap-3">
+          <div className="px-4 py-3 rounded-xl border-2 border-blue-500 bg-blue-50">
+            <p className="text-xs font-semibold text-blue-700">Total motos</p>
+            <p className="text-2xl font-bold text-gray-900">{totalMotos}</p>
+            <p className="text-[10px] text-gray-500">
+              {jetsExcursion} exc · {jetsCircuito} circ · {jetsConTit} con tit.
+            </p>
+          </div>
+          {jetsDurationList.length === 0 ? (
+            <p className="text-sm text-gray-500 self-center">Sin motos reservadas este día.</p>
+          ) : (
+            jetsDurationList.map(([d, c]) => (
+              <div key={d} className="px-4 py-3 rounded-xl border border-blue-200 bg-white">
+                <p className="text-xs font-semibold text-blue-700">{durationLabelShort(d)}</p>
+                <p className="text-xl font-bold text-gray-900">{c}</p>
+                <p className="text-[10px] text-gray-500">
+                  {c === 1 ? 'moto' : 'motos'}
+                </p>
+              </div>
+            ))
+          )}
         </div>
       </Section>
 
