@@ -115,10 +115,6 @@ export default async function DashboardPage({
   )
   const voucherTotal = voucherRows.reduce((s, r) => s + (r.incident_refund_amount ?? 0), 0)
 
-  // No-shows: departed but not arrived
-  const noShows = active.filter((r) => r.departed && !r.arrived)
-  const arrivedPeople = peopleIn(active.filter((r) => r.arrived))
-
   // Audit modifications (exclude the noisy ones)
   const modifications = audit.filter((a) => ['modified', 'cancelled', 'arrived', 'departed', 'reactivated'].includes(a.action))
   const createdViaAudit = audit.filter((a) => a.action === 'created')
@@ -190,7 +186,7 @@ export default async function DashboardPage({
         <StatCard
           label="Personas del día"
           value={String(totalPeople)}
-          hint={`${arrivedPeople} llegados${noShows.length > 0 ? ` · ${noShows.length} no-show` : ''}`}
+          hint={`${active.length} reservas activas`}
         />
         <StatCard label="Motos reservadas" value={String(totalMotos)} hint={`${peopleIn(jetsRes)} personas`} />
         <StatCard
@@ -224,15 +220,13 @@ export default async function DashboardPage({
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
           {nauticActivities.map((a) => {
             const p = byActivity[a.name]?.people ?? 0
-            // Rough daily capacity: capacity × number of 30-min slots (9:30→20:00 = 21 slots)
-            const dailyCap = a.capacity * 21
-            const pct = dailyCap > 0 ? Math.round((p / dailyCap) * 100) : 0
+            const count = nauticRes.filter((r) => r.activity === a.name).length
             return (
               <MiniStat
                 key={a.name}
                 label={a.name}
                 value={String(p)}
-                sub={`${pct}% ocupación`}
+                sub={`${count} reserva${count !== 1 ? 's' : ''}`}
                 color={a.color}
               />
             )
