@@ -21,6 +21,8 @@ type Reservation = {
   incident_comment: string | null
   incident_resolution: string | null
   incident_refund_amount: number | null
+  incident_resolved_by: string | null
+  incident_authorized_by: string | null
   created_at: string
 }
 
@@ -301,6 +303,14 @@ export default async function DashboardPage({
                     <span className="text-gray-600">→</span>
                     <span className="text-amber-800">{r.incident_resolution}</span>
                   </>
+                )}
+                {r.incident_resolved_by && (
+                  <span className="text-xs text-gray-600">· gest: {r.incident_resolved_by}</span>
+                )}
+                {r.incident_authorized_by && (
+                  <span className={`text-xs px-1 rounded ${
+                    r.incident_authorized_by === 'Sin autorizacion' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
+                  }`}>aut: {r.incident_authorized_by}</span>
                 )}
                 {r.incident_refund_amount != null && (
                   <span className="ml-auto font-bold text-red-700">{r.incident_refund_amount}€</span>

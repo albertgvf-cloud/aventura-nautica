@@ -23,6 +23,8 @@ type Reservation = {
   incident_resolution: string | null
   incident_refund_amount: number | null
   incident_refund_type: string | null
+  incident_resolved_by: string | null
+  incident_authorized_by: string | null
 }
 
 export default function ParasailingGrid({

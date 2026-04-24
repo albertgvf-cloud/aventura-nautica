@@ -13,6 +13,7 @@ import {
   ALL_CON_TIT_JETS,
   INCIDENT_TYPES,
   INCIDENT_RESOLUTIONS,
+  INCIDENT_AUTHORIZERS,
 } from '@/lib/config'
 
 type Reservation = {
@@ -39,6 +40,8 @@ type Reservation = {
   incident_resolution?: string | null
   incident_refund_amount?: number | null
   incident_refund_type?: string | null
+  incident_resolved_by?: string | null
+  incident_authorized_by?: string | null
 }
 
 const allJets = [...ALL_SIN_TIT_JETS, ...ALL_CON_TIT_JETS]
@@ -181,6 +184,8 @@ function EditForm({
   const [refundAmount, setRefundAmount] = useState<string>(
     r.incident_refund_amount != null ? String(r.incident_refund_amount) : ''
   )
+  const [resolvedBy, setResolvedBy] = useState(r.incident_resolved_by ?? '')
+  const [authorizedBy, setAuthorizedBy] = useState(r.incident_authorized_by ?? '')
   const allGroupIds = groupMembers.length > 0 ? groupMembers.map((m) => m.id) : [r.id]
   const [affectedIds, setAffectedIds] = useState<string[]>(allGroupIds)
   const [newDate, setNewDate] = useState(r.date ?? '')
@@ -226,6 +231,19 @@ function EditForm({
     e.preventDefault()
     setSaving(true)
     setError(null)
+
+    if (hasIncident && incidentResolution) {
+      if (!resolvedBy) {
+        setError('Indica qué comercial ha gestionado la resolucion.')
+        setSaving(false)
+        return
+      }
+      if (!authorizedBy) {
+        setError('Indica quién ha autorizado la resolucion (o "Sin autorizacion").')
+        setSaving(false)
+        return
+      }
+    }
 
     const parsedAmount = refundAmount.trim() === '' ? null : Number(refundAmount)
 
@@ -274,6 +292,8 @@ function EditForm({
         incident_resolution: null,
         incident_refund_amount: null,
         incident_refund_type: null,
+        incident_resolved_by: null,
+        incident_authorized_by: null,
       }
       const { error: err } = await supabase.from('reservations').update(untouchedUpdate).in('id', untouchedIds)
       if (err) { setError(err.message); setSaving(false); return }
@@ -293,6 +313,8 @@ function EditForm({
         incident_resolution: incidentResolution || null,
         incident_refund_amount: showAmount ? parsedAmount : null,
         incident_refund_type: null,
+        incident_resolved_by: resolvedBy || null,
+        incident_authorized_by: authorizedBy || null,
       }
       if (showDateChange) {
         incidentUpdate.date = newDate || r.date
@@ -493,35 +515,55 @@ function EditForm({
               </div>
             )}
             {incidentResolution && (
-              <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2">
-                {showDateChange && (
-                  <>
-                    <Field label="Nuevo dia">
-                      <input type="date" value={newDate} onChange={(e) => setNewDate(e.target.value)} className="inp" />
+              <>
+                <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  {showDateChange && (
+                    <>
+                      <Field label="Nuevo dia">
+                        <input type="date" value={newDate} onChange={(e) => setNewDate(e.target.value)} className="inp" />
+                      </Field>
+                      <Field label="Nueva hora">
+                        <select value={time} onChange={(e) => setTime(e.target.value)} className="inp">
+                          {JETS_SLOTS.map((t) => (
+                            <option key={t} value={t}>{t}</option>
+                          ))}
+                        </select>
+                      </Field>
+                    </>
+                  )}
+                  {showAmount && (
+                    <Field label={isVoucher ? 'Importe del vale (€)' : 'Importe a devolver (€)'}>
+                      <input
+                        type="number"
+                        min={0}
+                        step="0.01"
+                        value={refundAmount}
+                        onChange={(e) => setRefundAmount(e.target.value)}
+                        className="inp"
+                        placeholder="0.00"
+                      />
                     </Field>
-                    <Field label="Nueva hora">
-                      <select value={time} onChange={(e) => setTime(e.target.value)} className="inp">
-                        {JETS_SLOTS.map((t) => (
-                          <option key={t} value={t}>{t}</option>
-                        ))}
-                      </select>
-                    </Field>
-                  </>
-                )}
-                {showAmount && (
-                  <Field label={isVoucher ? 'Importe del vale (€)' : 'Importe a devolver (€)'}>
-                    <input
-                      type="number"
-                      min={0}
-                      step="0.01"
-                      value={refundAmount}
-                      onChange={(e) => setRefundAmount(e.target.value)}
-                      className="inp"
-                      placeholder="0.00"
-                    />
+                  )}
+                </div>
+                <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <Field label="Gestionada por * (comercial)">
+                    <select value={resolvedBy} onChange={(e) => setResolvedBy(e.target.value)} className="inp" required>
+                      <option value="">-- selecciona --</option>
+                      {staffNames.map((n) => (
+                        <option key={n} value={n}>{n}</option>
+                      ))}
+                    </select>
                   </Field>
-                )}
-              </div>
+                  <Field label="Autorizada por *">
+                    <select value={authorizedBy} onChange={(e) => setAuthorizedBy(e.target.value)} className="inp" required>
+                      <option value="">-- selecciona --</option>
+                      {INCIDENT_AUTHORIZERS.map((a) => (
+                        <option key={a} value={a}>{a}</option>
+                      ))}
+                    </select>
+                  </Field>
+                </div>
+              </>
             )}
             {isPartial && (
               <p className="mt-2 text-xs text-sky-700">
