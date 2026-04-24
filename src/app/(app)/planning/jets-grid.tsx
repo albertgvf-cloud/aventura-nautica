@@ -373,45 +373,6 @@ export default function JetsGrid({
 
   return (
     <div className="space-y-4">
-      {/* QUICK AVAILABILITY CHECK */}
-      <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-4">
-        <h3 className="font-semibold text-gray-900 text-sm mb-2">🔍 Consulta rápida de disponibilidad VX</h3>
-        <div className="flex flex-wrap items-end gap-3">
-          <div>
-            <label className="block text-xs text-gray-500 mb-0.5">Hora salida</label>
-            <select value={checkTime} onChange={(e) => setCheckTime(e.target.value)}
-              className="px-2 py-1.5 border border-gray-300 rounded-lg text-sm text-gray-900 outline-none focus:ring-2 focus:ring-sky-500">
-              <option value="">— selecciona —</option>
-              {JETS_SLOTS.map((t) => <option key={t} value={t}>{t}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs text-gray-500 mb-0.5">Duración</label>
-            <select value={checkDuration} onChange={(e) => setCheckDuration(Number(e.target.value))}
-              className="px-2 py-1.5 border border-gray-300 rounded-lg text-sm text-gray-900 outline-none focus:ring-2 focus:ring-sky-500">
-              {allDurations.map((d) => <option key={d} value={d}>{durationLabel(d)}</option>)}
-            </select>
-          </div>
-          {quickCheckResult && (
-            <div className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold ${
-              quickCheckResult.free === 0 ? 'bg-red-100 text-red-800' :
-              quickCheckResult.free <= 3 ? 'bg-amber-100 text-amber-800' :
-              'bg-green-100 text-green-800'
-            }`}>
-              <span className="text-lg">{quickCheckResult.free === 0 ? '❌' : quickCheckResult.free <= 3 ? '⚠️' : '✅'}</span>
-              <span>{quickCheckResult.free} VX libres de {quickCheckResult.total}</span>
-              <span className="text-xs font-normal opacity-75">
-                ({checkTime}–{addMinutesToTime(checkTime, checkDuration)})
-              </span>
-            </div>
-          )}
-          {checkTime && (
-            <button type="button" onClick={() => setCheckTime('')}
-              className="text-xs text-gray-400 hover:text-gray-600 underline">Limpiar</button>
-          )}
-        </div>
-      </div>
-
       {/* View mode toggle */}
       <div className="flex items-center justify-between flex-wrap gap-2 no-print">
         <div className="flex gap-1 bg-gray-100 p-1 rounded-xl">
@@ -769,13 +730,13 @@ function JetsPrintTimeline({
                 return (
                   <div
                     key={startMinute}
-                    className={`absolute top-0.5 bottom-0.5 flex items-center justify-center text-[10px] font-bold text-black ${
+                    className={`absolute top-0.5 bottom-0.5 flex items-center justify-center ${
                       count === 0 ? '' :
-                      count >= 3 ? 'bg-red-200' :
-                      count >= 2 ? 'bg-amber-200' :
-                      'bg-blue-200'
+                      count >= 3 ? 'bg-red-300' :
+                      count >= 2 ? 'bg-amber-300' :
+                      'bg-blue-300'
                     }`}
-                    style={{ left: px(startMinute), width: slotW }}
+                    style={{ left: px(startMinute), width: slotW, color: '#000', fontSize: 11, fontWeight: 900 }}
                     title={`${count} monitor${count !== 1 ? 'es' : ''} a las ${timeLabel}`}
                   >
                     {count || ''}
