@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { logAudit } from '@/lib/audit'
 import { JETS, ALL_SIN_TIT_JETS, ALL_CON_TIT_JETS, JETS_SLOTS, OFFICES, durationLabel, timeToMinutes } from '@/lib/config'
+import { getStoredOffice } from '@/lib/office'
 
 type Reservation = {
   time: string
@@ -37,7 +38,7 @@ export default function JetsForm({
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
   const [staff, setStaff] = useState('')
-  const [office, setOffice] = useState('')
+  const [office, setOffice] = useState(() => getStoredOffice())
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)

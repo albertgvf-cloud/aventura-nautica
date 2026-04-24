@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { logAudit } from '@/lib/audit'
 import { OFFICES, TIME_SLOTS } from '@/lib/config'
+import { getStoredOffice } from '@/lib/office'
 
 type Activity = { name: string; capacity: number; hardMax: number; color: string }
 
@@ -32,7 +33,7 @@ export default function ReservationForm({
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
   const [staff, setStaff] = useState('')
-  const [office, setOffice] = useState('')
+  const [office, setOffice] = useState(() => getStoredOffice())
   const status = 'Confirmada'
   const [notes, setNotes] = useState('')
   const [saving, setSaving] = useState(false)

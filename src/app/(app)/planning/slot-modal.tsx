@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { logAudit } from '@/lib/audit'
 import { OFFICES, STATUSES, TIME_SLOTS, INCIDENT_TYPES, INCIDENT_RESOLUTIONS } from '@/lib/config'
+import { getStoredOffice } from '@/lib/office'
 
 type Reservation = {
   id: string
@@ -808,7 +809,7 @@ function QuickAddForm({
   const [phone, setPhone] = useState('')
   const [numPeople, setNumPeople] = useState(1)
   const [staff, setStaff] = useState('')
-  const [office, setOffice] = useState('')
+  const [office, setOffice] = useState(() => getStoredOffice())
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 

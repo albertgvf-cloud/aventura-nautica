@@ -74,6 +74,7 @@ export default function JetsGrid({
   const [quickBook, setQuickBook] = useState<{ jetId: string; time: string } | null>(null)
   const [checkTime, setCheckTime] = useState('')
   const [checkDuration, setCheckDuration] = useState(30)
+  const [viewMode, setViewMode] = useState<'timeline' | 'list'>('timeline')
   const active = reservations.filter((r) => r.status !== 'Cancelada')
 
   const startMin = JETS.startHour * 60
@@ -411,6 +412,43 @@ export default function JetsGrid({
         </div>
       </div>
 
+      {/* View mode toggle */}
+      <div className="flex items-center justify-between flex-wrap gap-2 no-print">
+        <div className="flex gap-1 bg-gray-100 p-1 rounded-xl">
+          <button
+            type="button"
+            onClick={() => setViewMode('timeline')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+              viewMode === 'timeline' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600'
+            }`}
+          >
+            📊 Timeline
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode('list')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+              viewMode === 'list' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600'
+            }`}
+          >
+            📄 Lista A4
+          </button>
+        </div>
+        {viewMode === 'list' && (
+          <button
+            type="button"
+            onClick={() => window.print()}
+            className="px-3 py-1.5 bg-sky-600 hover:bg-sky-700 text-white rounded-lg text-xs font-medium"
+          >
+            🖨️ Imprimir
+          </button>
+        )}
+      </div>
+
+      {viewMode === 'list' && <JetsListView reservations={active} date={date} />}
+
+      {viewMode === 'timeline' && (
+      <>
       {/* GANTT TIMELINE — single wrapper so no space-y-4 gaps between header/axis/body */}
       <div>
         <div className="border border-gray-200 rounded-t-xl">
@@ -533,9 +571,142 @@ export default function JetsGrid({
           <div><p className="text-gray-500 text-xs">Motos libres ahora</p><p className="font-bold text-green-600 text-lg">{ALL_SIN_TIT_JETS.length - busyVX + ALL_CON_TIT_JETS.length - busyConTit}</p></div>
         </div>
       </div>
+      </>
+      )}
 
       {selectedRes && <JetDetailModal reservation={selectedRes} allReservations={reservations} staffNames={staffNames} onClose={() => setSelectedRes(null)} />}
       {quickBook && <JetQuickBook jetId={quickBook.jetId} time={quickBook.time} staffNames={staffNames} date={date} existingReservations={reservations} onClose={() => setQuickBook(null)} />}
+
+      <style jsx global>{`
+        @media print {
+          @page { size: A4 landscape; margin: 8mm; }
+          body * { visibility: hidden !important; }
+          .print-area, .print-area * { visibility: visible !important; }
+          .print-area { position: absolute; left: 0; top: 0; width: 100%; }
+          .no-print { display: none !important; }
+        }
+      `}</style>
+    </div>
+  )
+}
+
+function JetsListView({ reservations, date }: { reservations: Reservation[]; date: string }) {
+  const allJets = [...ALL_SIN_TIT_JETS, ...ALL_CON_TIT_JETS]
+  // Group reservations by group_id (or singleton)
+  const seen = new Set<string>()
+  type Row = {
+    ids: string[]
+    time: string
+    endTime: string
+    activity: string
+    type: 'exc' | 'cir' | 'tit'
+    durationMin: number
+    numPeople: number
+    jetLabels: string[]
+    clientName: string
+    phone: string | null
+    staff: string | null
+    office: string | null
+  }
+  const rows: Row[] = []
+  for (const r of reservations) {
+    if (seen.has(r.id)) continue
+    const members = r.group_id
+      ? reservations.filter((s) => s.group_id === r.group_id)
+      : [r]
+    members.forEach((m) => seen.add(m.id))
+    const start = r.time?.slice(0, 5) ?? ''
+    const dur = r.duration_minutes ?? 60
+    const endM = timeToMinutes(start) + dur
+    const endTime = `${String(Math.floor(endM / 60)).padStart(2, '0')}:${String(endM % 60).padStart(2, '0')}`
+    const type: Row['type'] = r.activity.startsWith('Excursion')
+      ? 'exc'
+      : r.activity.startsWith('Circuito')
+      ? 'cir'
+      : 'tit'
+    const jetLabels = members
+      .map((m) => allJets.find((j) => j.id === m.jet_id)?.label ?? m.jet_id ?? '—')
+      .filter(Boolean) as string[]
+    const totalPeople = members.reduce((s, m) => s + (m.num_people ?? 1), 0)
+    rows.push({
+      ids: members.map((m) => m.id),
+      time: start,
+      endTime,
+      activity: r.activity,
+      type,
+      durationMin: dur,
+      numPeople: totalPeople,
+      jetLabels,
+      clientName: r.client_name,
+      phone: r.phone,
+      staff: r.staff,
+      office: r.office,
+    })
+  }
+  rows.sort((a, b) => {
+    if (a.time !== b.time) return a.time.localeCompare(b.time)
+    // same time: excursions first
+    const orderMap = { exc: 0, cir: 1, tit: 2 }
+    if (orderMap[a.type] !== orderMap[b.type]) return orderMap[a.type] - orderMap[b.type]
+    // longest first
+    return b.durationMin - a.durationMin
+  })
+
+  const dateObj = new Date(date + 'T00:00:00')
+  const dayNames = ['Domingo', 'Lunes', 'Martes', 'Miercoles', 'Jueves', 'Viernes', 'Sabado']
+  const monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
+  const dateLabel = `${dayNames[dateObj.getDay()]}, ${dateObj.getDate()} ${monthNames[dateObj.getMonth()]} ${dateObj.getFullYear()}`
+
+  return (
+    <div className="print-area bg-white rounded-xl border border-gray-200 p-4 text-[11px]">
+      <div className="flex items-end justify-between border-b-2 border-gray-900 pb-2 mb-2">
+        <div>
+          <h2 className="text-base font-bold text-gray-900">Planning Jets</h2>
+          <p className="text-xs text-gray-600">{dateLabel}</p>
+        </div>
+        <p className="text-xs text-gray-500">{rows.length} reservas · {reservations.length} motos</p>
+      </div>
+      {rows.length === 0 ? (
+        <p className="text-center text-gray-500 py-6">Sin reservas este dia.</p>
+      ) : (
+        <table className="w-full border-collapse">
+          <thead>
+            <tr className="border-b border-gray-400 text-left">
+              <th className="px-1.5 py-1 font-semibold">Hora</th>
+              <th className="px-1.5 py-1 font-semibold">Fin</th>
+              <th className="px-1.5 py-1 font-semibold">Tipo</th>
+              <th className="px-1.5 py-1 font-semibold">Actividad</th>
+              <th className="px-1.5 py-1 font-semibold">Cliente</th>
+              <th className="px-1.5 py-1 font-semibold">Tel.</th>
+              <th className="px-1.5 py-1 font-semibold">Motos</th>
+              <th className="px-1.5 py-1 font-semibold text-center">N</th>
+              <th className="px-1.5 py-1 font-semibold">Atendido</th>
+              <th className="px-1.5 py-1 font-semibold">Oficina</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r, i) => (
+              <tr key={r.ids.join('-')} className={`border-b border-gray-200 ${i % 2 === 1 ? 'bg-gray-50' : ''}`}>
+                <td className="px-1.5 py-1 font-mono font-bold">{r.time}</td>
+                <td className="px-1.5 py-1 font-mono text-gray-600">{r.endTime}</td>
+                <td className="px-1.5 py-1">
+                  <span className={`inline-block w-2 h-2 rounded-full mr-1 ${
+                    r.type === 'exc' ? 'bg-orange-500' : r.type === 'cir' ? 'bg-blue-500' : 'bg-green-600'
+                  }`} />
+                  {r.type === 'exc' ? 'Exc' : r.type === 'cir' ? 'Circ' : 'Tit'}
+                </td>
+                <td className="px-1.5 py-1">{r.activity}</td>
+                <td className="px-1.5 py-1 font-semibold">{r.clientName}</td>
+                <td className="px-1.5 py-1">{r.phone ?? '—'}</td>
+                <td className="px-1.5 py-1">{r.jetLabels.join(', ')}</td>
+                <td className="px-1.5 py-1 text-center font-semibold">{r.numPeople}</td>
+                <td className="px-1.5 py-1">{r.staff ?? '—'}</td>
+                <td className="px-1.5 py-1">{r.office ?? '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
     </div>
   )
 }
