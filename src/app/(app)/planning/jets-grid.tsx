@@ -445,7 +445,7 @@ export default function JetsGrid({
         )}
       </div>
 
-      {viewMode === 'list' && <JetsListView reservations={active} date={date} />}
+      {viewMode === 'list' && <JetsPrintTimeline reservations={active} date={date} virtualVXRows={virtualVXRows} conTitJets={sortedConTit} jetBookingsFor={jetBookings} />}
 
       {viewMode === 'timeline' && (
       <>
@@ -590,122 +590,176 @@ export default function JetsGrid({
   )
 }
 
-function JetsListView({ reservations, date }: { reservations: Reservation[]; date: string }) {
-  const allJets = [...ALL_SIN_TIT_JETS, ...ALL_CON_TIT_JETS]
-  // Group reservations by group_id (or singleton)
-  const seen = new Set<string>()
-  type Row = {
-    ids: string[]
-    time: string
-    endTime: string
-    activity: string
-    type: 'exc' | 'cir' | 'tit'
-    durationMin: number
-    numPeople: number
-    jetLabels: string[]
-    clientName: string
-    phone: string | null
-    staff: string | null
-    office: string | null
+type JetDef = { id: string; model: string; label: string }
+
+function JetsPrintTimeline({
+  reservations,
+  date,
+  virtualVXRows,
+  conTitJets,
+  jetBookingsFor,
+}: {
+  reservations: Reservation[]
+  date: string
+  virtualVXRows: Reservation[][]
+  conTitJets: readonly JetDef[]
+  jetBookingsFor: (jetId: string) => Reservation[]
+}) {
+  const PX_PER_HOUR_PRINT = 80
+  const LABEL_W = 60
+  const ROW_H = 18
+  const startMin = JETS.startHour * 60
+  const endMin = JETS.endHour * 60
+  const totalMin = endMin - startMin
+  const timelineWidth = ((endMin - startMin) / 60) * PX_PER_HOUR_PRINT
+  const totalWidth = LABEL_W + timelineWidth
+  const hours: number[] = []
+  for (let h = JETS.startHour; h <= JETS.endHour; h++) hours.push(h)
+  const px = (m: number) => ((m - startMin) / totalMin) * timelineWidth
+
+  function typeOf(activity: string): 'exc' | 'cir' | 'tit' {
+    if (activity.startsWith('Excursion')) return 'exc'
+    if (activity.startsWith('Circuito')) return 'cir'
+    return 'tit'
   }
-  const rows: Row[] = []
-  for (const r of reservations) {
-    if (seen.has(r.id)) continue
-    const members = r.group_id
-      ? reservations.filter((s) => s.group_id === r.group_id)
-      : [r]
-    members.forEach((m) => seen.add(m.id))
-    const start = r.time?.slice(0, 5) ?? ''
-    const dur = r.duration_minutes ?? 60
-    const endM = timeToMinutes(start) + dur
-    const endTime = `${String(Math.floor(endM / 60)).padStart(2, '0')}:${String(endM % 60).padStart(2, '0')}`
-    const type: Row['type'] = r.activity.startsWith('Excursion')
-      ? 'exc'
-      : r.activity.startsWith('Circuito')
-      ? 'cir'
-      : 'tit'
-    const jetLabels = members
-      .map((m) => allJets.find((j) => j.id === m.jet_id)?.label ?? m.jet_id ?? '—')
-      .filter(Boolean) as string[]
-    const totalPeople = members.reduce((s, m) => s + (m.num_people ?? 1), 0)
-    rows.push({
-      ids: members.map((m) => m.id),
-      time: start,
-      endTime,
-      activity: r.activity,
-      type,
-      durationMin: dur,
-      numPeople: totalPeople,
-      jetLabels,
-      clientName: r.client_name,
-      phone: r.phone,
-      staff: r.staff,
-      office: r.office,
-    })
+  function colorsFor(type: 'exc' | 'cir' | 'tit') {
+    if (type === 'exc') return 'bg-orange-500 border-orange-600 text-white'
+    if (type === 'cir') return 'bg-blue-500 border-blue-600 text-white'
+    return 'bg-green-600 border-green-700 text-white'
   }
-  rows.sort((a, b) => {
-    if (a.time !== b.time) return a.time.localeCompare(b.time)
-    // same time: excursions first
-    const orderMap = { exc: 0, cir: 1, tit: 2 }
-    if (orderMap[a.type] !== orderMap[b.type]) return orderMap[a.type] - orderMap[b.type]
-    // longest first
-    return b.durationMin - a.durationMin
-  })
+  function shortModel(model: string): string {
+    if (model === 'Jet Blaster') return 'JB'
+    if (model === 'EX100') return 'EX'
+    if (model === 'VXHO') return 'VXHO'
+    if (model === 'FX180') return 'FX'
+    if (model === 'VX115') return 'VX'
+    return model
+  }
+
+  // Only render VX rows that have bookings
+  const usedVXRows = virtualVXRows.map((bookings, i) => ({ bookings, i })).filter(({ bookings }) => bookings.length > 0)
 
   const dateObj = new Date(date + 'T00:00:00')
   const dayNames = ['Domingo', 'Lunes', 'Martes', 'Miercoles', 'Jueves', 'Viernes', 'Sabado']
   const monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
   const dateLabel = `${dayNames[dateObj.getDay()]}, ${dateObj.getDate()} ${monthNames[dateObj.getMonth()]} ${dateObj.getFullYear()}`
+  const totalMotos = reservations.length
+
+  function Bar({ r }: { r: Reservation }) {
+    const t = r.time?.slice(0, 5) ?? '09:00'
+    const startM = timeToMinutes(t)
+    const dur = r.duration_minutes ?? 60
+    const left = px(startM)
+    const width = Math.max(20, px(startM + dur) - left - 1)
+    const type = typeOf(r.activity)
+    const jet = [...ALL_SIN_TIT_JETS, ...ALL_CON_TIT_JETS].find((j) => j.id === r.jet_id)
+    const modelLabel = type === 'tit' && jet ? shortModel(jet.model) : ''
+    return (
+      <div
+        className={`absolute top-0.5 bottom-0.5 rounded border ${colorsFor(type)} overflow-hidden flex items-center gap-1 px-1`}
+        style={{ left, width, fontSize: 9, lineHeight: 1.1 }}
+        title={`${r.client_name} · ${t} · ${durationShort(dur)}${modelLabel ? ` · ${modelLabel}` : ''}`}
+      >
+        <span className="font-mono font-bold shrink-0">{t}</span>
+        {modelLabel && (
+          <span className="shrink-0 px-0.5 rounded bg-white/25 font-bold">{modelLabel}</span>
+        )}
+        <span className="truncate font-semibold">{r.client_name}</span>
+        <span className="shrink-0 opacity-80">{durationShort(dur)}</span>
+      </div>
+    )
+  }
+
+  function GridLines() {
+    return (
+      <>
+        {hours.map((h) => (
+          <div key={h} className="absolute top-0 h-full border-l border-gray-300" style={{ left: px(h * 60) }} />
+        ))}
+      </>
+    )
+  }
 
   return (
-    <div className="print-area bg-white rounded-xl border border-gray-200 p-4 text-[11px]">
+    <div className="print-area bg-white rounded-xl border border-gray-200 p-3">
+      {/* Header with date + legend */}
       <div className="flex items-end justify-between border-b-2 border-gray-900 pb-2 mb-2">
         <div>
           <h2 className="text-base font-bold text-gray-900">Planning Jets</h2>
-          <p className="text-xs text-gray-600">{dateLabel}</p>
+          <p className="text-[11px] text-gray-600">{dateLabel}</p>
         </div>
-        <p className="text-xs text-gray-500">{rows.length} reservas · {reservations.length} motos</p>
+        <div className="flex gap-3 text-[10px] text-gray-700 font-medium">
+          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-orange-500" /> Excursión</span>
+          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-blue-500" /> Circuito</span>
+          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-green-600" /> Con tit.</span>
+          <span className="text-gray-500">· {totalMotos} motos</span>
+        </div>
       </div>
-      {rows.length === 0 ? (
-        <p className="text-center text-gray-500 py-6">Sin reservas este dia.</p>
-      ) : (
-        <table className="w-full border-collapse">
-          <thead>
-            <tr className="border-b border-gray-400 text-left">
-              <th className="px-1.5 py-1 font-semibold">Hora</th>
-              <th className="px-1.5 py-1 font-semibold">Fin</th>
-              <th className="px-1.5 py-1 font-semibold">Tipo</th>
-              <th className="px-1.5 py-1 font-semibold">Actividad</th>
-              <th className="px-1.5 py-1 font-semibold">Cliente</th>
-              <th className="px-1.5 py-1 font-semibold">Tel.</th>
-              <th className="px-1.5 py-1 font-semibold">Motos</th>
-              <th className="px-1.5 py-1 font-semibold text-center">N</th>
-              <th className="px-1.5 py-1 font-semibold">Atendido</th>
-              <th className="px-1.5 py-1 font-semibold">Oficina</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r, i) => (
-              <tr key={r.ids.join('-')} className={`border-b border-gray-200 ${i % 2 === 1 ? 'bg-gray-50' : ''}`}>
-                <td className="px-1.5 py-1 font-mono font-bold">{r.time}</td>
-                <td className="px-1.5 py-1 font-mono text-gray-600">{r.endTime}</td>
-                <td className="px-1.5 py-1">
-                  <span className={`inline-block w-2 h-2 rounded-full mr-1 ${
-                    r.type === 'exc' ? 'bg-orange-500' : r.type === 'cir' ? 'bg-blue-500' : 'bg-green-600'
-                  }`} />
-                  {r.type === 'exc' ? 'Exc' : r.type === 'cir' ? 'Circ' : 'Tit'}
-                </td>
-                <td className="px-1.5 py-1">{r.activity}</td>
-                <td className="px-1.5 py-1 font-semibold">{r.clientName}</td>
-                <td className="px-1.5 py-1">{r.phone ?? '—'}</td>
-                <td className="px-1.5 py-1">{r.jetLabels.join(', ')}</td>
-                <td className="px-1.5 py-1 text-center font-semibold">{r.numPeople}</td>
-                <td className="px-1.5 py-1">{r.staff ?? '—'}</td>
-                <td className="px-1.5 py-1">{r.office ?? '—'}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+
+      {/* Time axis */}
+      <div className="relative border border-gray-400 bg-gray-50" style={{ width: totalWidth, height: 18 }}>
+        <div className="absolute top-0 bottom-0 bg-gray-100 border-r border-gray-400" style={{ width: LABEL_W, left: 0 }}>
+          <span className="flex items-center justify-center w-full h-full text-[9px] font-bold text-gray-600">Hora</span>
+        </div>
+        <div className="absolute top-0 bottom-0" style={{ left: LABEL_W, width: timelineWidth }}>
+          {hours.slice(0, -1).map((h) => (
+            <div
+              key={h}
+              className="absolute top-0 h-full border-l border-gray-400"
+              style={{ left: px(h * 60), width: PX_PER_HOUR_PRINT }}
+            >
+              <span className="flex items-center justify-center w-full h-full text-[10px] font-bold text-gray-700">{h}:00</span>
+            </div>
+          ))}
+          <div className="absolute top-0 h-full border-l border-gray-400" style={{ left: px(JETS.endHour * 60) }} />
+        </div>
+      </div>
+
+      {/* VX section */}
+      {usedVXRows.length > 0 && (
+        <div className="border-x border-b border-gray-300">
+          <div className="bg-blue-50 text-[9px] font-bold text-blue-800 px-2 py-0.5 border-b border-blue-200" style={{ width: totalWidth }}>
+            VX115 — Sin titulación ({usedVXRows.length} filas en uso)
+          </div>
+          {usedVXRows.map(({ bookings, i }) => (
+            <div key={`vx-${i}`} className="relative border-b border-gray-200" style={{ width: totalWidth, height: ROW_H }}>
+              <div className="absolute top-0 bottom-0 bg-blue-50/50 border-r border-gray-300 flex items-center justify-center text-[9px] font-bold text-blue-700" style={{ width: LABEL_W, left: 0 }}>
+                VX {i + 1}
+              </div>
+              <div className="absolute top-0 bottom-0" style={{ left: LABEL_W, width: timelineWidth }}>
+                <GridLines />
+                {bookings.map((b) => <Bar key={b.id} r={b} />)}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Con-titulación section */}
+      {conTitJets.length > 0 && (
+        <div className="border-x border-b border-gray-300 mt-1">
+          <div className="bg-green-50 text-[9px] font-bold text-green-800 px-2 py-0.5 border-b border-green-200" style={{ width: totalWidth }}>
+            Con titulación
+          </div>
+          {conTitJets.map((jet) => {
+            const bookings = jetBookingsFor(jet.id)
+            return (
+              <div key={jet.id} className="relative border-b border-gray-200" style={{ width: totalWidth, height: ROW_H }}>
+                <div className="absolute top-0 bottom-0 bg-green-50/50 border-r border-gray-300 flex items-center justify-center text-[9px] font-bold text-green-700" style={{ width: LABEL_W, left: 0 }}>
+                  {jet.label}
+                </div>
+                <div className="absolute top-0 bottom-0" style={{ left: LABEL_W, width: timelineWidth }}>
+                  <GridLines />
+                  {bookings.map((b) => <Bar key={b.id} r={b} />)}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {usedVXRows.length === 0 && conTitJets.every((j) => jetBookingsFor(j.id).length === 0) && (
+        <p className="text-center text-gray-500 py-6 text-sm">Sin reservas este dia.</p>
       )}
     </div>
   )
