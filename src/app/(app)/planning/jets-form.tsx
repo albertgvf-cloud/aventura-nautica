@@ -63,8 +63,8 @@ export default function JetsForm({
     return fleet.filter((j) => !busyIds.has(j.id))
   }
 
-  // Fleet depends on category
-  const fleet = category === 'sin' ? ALL_SIN_TIT_JETS : ALL_CON_TIT_JETS
+  // Fleet depends on category: licensed drivers can also book a VX
+  const fleet = category === 'sin' ? ALL_SIN_TIT_JETS : [...ALL_SIN_TIT_JETS, ...ALL_CON_TIT_JETS]
   const availableJets = useMemo(() => getAvailableJets(time, duration, fleet), [time, duration, category, active])
 
   // Group available jets by model
