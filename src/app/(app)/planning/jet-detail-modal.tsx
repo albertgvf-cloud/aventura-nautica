@@ -4,12 +4,22 @@ import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { logAudit } from '@/lib/audit'
-import { OFFICES, STATUSES, JETS_SLOTS, durationLabel, timeToMinutes, ALL_SIN_TIT_JETS, ALL_CON_TIT_JETS } from '@/lib/config'
+import {
+  OFFICES,
+  JETS_SLOTS,
+  durationLabel,
+  timeToMinutes,
+  ALL_SIN_TIT_JETS,
+  ALL_CON_TIT_JETS,
+  INCIDENT_TYPES,
+  INCIDENT_RESOLUTIONS,
+} from '@/lib/config'
 
 type Reservation = {
   id: string
   activity_type?: string
   activity: string
+  date?: string
   time: string
   num_people: number
   client_name: string
@@ -24,6 +34,11 @@ type Reservation = {
   duration_minutes: number | null
   notes: string | null
   group_id: string | null
+  incident_type?: string | null
+  incident_comment?: string | null
+  incident_resolution?: string | null
+  incident_refund_amount?: number | null
+  incident_refund_type?: string | null
 }
 
 const allJets = [...ALL_SIN_TIT_JETS, ...ALL_CON_TIT_JETS]
@@ -41,7 +56,6 @@ export default function JetDetailModal({
 }) {
   const router = useRouter()
   const supabase = createClient()
-  const [editing, setEditing] = useState(false)
 
   const jet = allJets.find((j) => j.id === r.jet_id)
 
@@ -54,16 +68,16 @@ export default function JetDetailModal({
         s.time?.slice(0, 5) === r.time?.slice(0, 5) &&
         s.status !== 'Cancelada'
       )
-  const siblings = groupMembers.filter((s) => s.id !== r.id)
   const allGroupIds = groupMembers.length > 0 ? groupMembers.map((s) => s.id) : [r.id]
   const isCancelled = r.status === 'Cancelada'
-  const returnTime = r.time && r.duration_minutes
-    ? (() => {
-        const [h, m] = r.time.slice(0, 5).split(':').map(Number)
-        const total = h * 60 + m + r.duration_minutes
-        return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`
-      })()
-    : '—'
+  const returnTime =
+    r.time && r.duration_minutes
+      ? (() => {
+          const [h, m] = r.time.slice(0, 5).split(':').map(Number)
+          const total = h * 60 + m + r.duration_minutes
+          return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`
+        })()
+      : '—'
 
   async function toggleArrived() {
     await supabase.from('reservations').update({ arrived: !r.arrived }).in('id', allGroupIds)
@@ -72,187 +86,128 @@ export default function JetDetailModal({
       action: 'arrived',
       activityType: 'jets',
       clientName: r.client_name,
-      details: !r.arrived ? `Marcado como llegado — ${jet?.label ?? r.jet_id}` : `Desmarcado llegada — ${jet?.label ?? r.jet_id}`,
-    })
-    router.refresh()
-  }
-  async function toggleDeparted() {
-    await supabase.from('reservations').update({ departed: !r.departed }).in('id', allGroupIds)
-    logAudit({
-      reservationId: r.id,
-      action: 'departed',
-      activityType: 'jets',
-      clientName: r.client_name,
-      details: !r.departed ? `Marcado como salido — ${jet?.label ?? r.jet_id}` : `Desmarcado salida — ${jet?.label ?? r.jet_id}`,
-    })
-    router.refresh()
-  }
-  async function cancelRes() {
-    await supabase.from('reservations').update({ status: 'Cancelada' }).in('id', allGroupIds)
-    logAudit({
-      reservationId: r.id,
-      action: 'cancelled',
-      activityType: 'jets',
-      clientName: r.client_name,
-      details: `${r.activity} — ${jet?.label ?? r.jet_id} a las ${r.time?.slice(0, 5)}`,
-    })
-    router.refresh()
-  }
-  async function reactivate() {
-    await supabase.from('reservations').update({ status: 'Confirmada' }).in('id', allGroupIds)
-    logAudit({
-      reservationId: r.id,
-      action: 'reactivated',
-      activityType: 'jets',
-      clientName: r.client_name,
-      details: `${r.activity} — ${jet?.label ?? r.jet_id} a las ${r.time?.slice(0, 5)}`,
+      details: !r.arrived
+        ? `Marcado como llegado — ${jet?.label ?? r.jet_id}`
+        : `Desmarcado llegada — ${jet?.label ?? r.jet_id}`,
     })
     router.refresh()
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 sm:p-4" onClick={onClose}>
-      <div className="bg-white w-full sm:rounded-2xl sm:shadow-2xl sm:max-w-lg max-h-full sm:max-h-[80vh] overflow-auto rounded-t-2xl h-[90vh] sm:h-auto"
-        onClick={(e) => e.stopPropagation()}>
-
+    <div
+      className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50 sm:p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white w-full sm:rounded-2xl sm:shadow-2xl sm:max-w-2xl max-h-full sm:max-h-[90vh] overflow-auto rounded-t-2xl h-[95vh] sm:h-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
-        <div className="px-4 sm:px-6 py-4 border-b border-gray-200 bg-gray-50">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-lg font-bold text-gray-900">{r.client_name}</h2>
-              <p className="text-sm text-gray-500">
+        <div className="px-4 sm:px-6 py-4 border-b border-gray-200 bg-gray-50 sticky top-0 z-10">
+          <div className="flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <h2 className="text-lg font-bold text-gray-900 truncate">{r.client_name}</h2>
+              <p className="text-sm text-gray-500 truncate">
                 {r.activity} · {jet?.label ?? r.jet_id ?? '—'} · {r.time?.slice(0, 5)}–{returnTime}
+                {groupMembers.length > 1 && <span> · grupo de {groupMembers.length} motos</span>}
               </p>
             </div>
-            <button onClick={onClose} className="w-10 h-10 flex items-center justify-center text-white bg-red-500 hover:bg-red-600 text-xl font-bold rounded-full shadow-md">&times;</button>
+            <button
+              onClick={onClose}
+              className="w-10 h-10 flex items-center justify-center text-white bg-red-500 hover:bg-red-600 text-xl font-bold rounded-full shadow-md shrink-0"
+            >
+              &times;
+            </button>
           </div>
+          {!isCancelled && (
+            <div className="mt-3 flex gap-2">
+              <button
+                onClick={toggleArrived}
+                className={`px-3 py-2 text-sm rounded-lg min-h-[44px] font-medium ${
+                  r.arrived
+                    ? 'bg-green-600 text-white border border-green-600'
+                    : 'border border-gray-300 text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                {r.arrived ? '✓ Llegado' : 'Llegado'}
+              </button>
+            </div>
+          )}
         </div>
 
-        {/* Details */}
+        {/* Edit form directly */}
         <div className="p-4 sm:p-6">
-          {!editing ? (
-            <>
-              <div className="grid grid-cols-2 gap-3 text-sm mb-4">
-                <Detail label="Cliente" value={r.client_name} cancelled={isCancelled} />
-                <Detail label="Teléfono" value={r.phone ?? '—'} />
-                <Detail label="Email" value={r.email ?? '—'} />
-                <Detail label="Personas" value={String(r.num_people)} />
-                <Detail label="Moto" value={jet ? `${jet.label} (${jet.model})` : r.jet_id ?? '—'} />
-                <Detail label="Actividad" value={r.activity} />
-                <Detail label="Hora" value={`${r.time?.slice(0, 5)} — ${returnTime}`} />
-                <Detail label="Duración" value={r.duration_minutes ? durationLabel(r.duration_minutes) : '—'} />
-                <Detail label="Atendido por" value={r.staff ?? '—'} />
-                <Detail label="Oficina" value={r.office ?? '—'} />
-                <Detail label="Estado" value={r.status} badge />
-                <Detail label="Llegada" value={r.arrived ? '✓ Llegó' : 'Pendiente'} green={r.arrived} />
-              </div>
-
-              {/* Sibling jets in same booking */}
-              {siblings.length > 0 && (
-                <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                  <p className="text-xs font-semibold text-blue-700 mb-1">Reserva con {allGroupIds.length} motos (se modifican todas juntas)</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {allGroupIds.map((id) => {
-                      const res = allReservations.find((s) => s.id === id)
-                      const j = allJets.find((jt) => jt.id === res?.jet_id)
-                      const isCurrent = id === r.id
-                      return (
-                        <span key={id} className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                          isCurrent ? 'bg-blue-200 text-blue-800' : 'bg-blue-100 text-blue-600'
-                        }`}>
-                          {j?.label ?? res?.jet_id ?? '?'} {isCurrent && '(actual)'}
-                        </span>
-                      )
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {r.notes && (
-                <div className="mb-4 p-2 bg-gray-50 rounded-lg text-sm text-gray-700">
-                  <span className="text-xs text-gray-500">Notas: </span>{r.notes}
-                </div>
-              )}
-
-              {/* Actions */}
-              <div className="flex flex-wrap gap-2">
-                <button onClick={() => setEditing(true)}
-                  className="px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-100 text-gray-700 min-h-[44px]">
-                  ✏️ Editar
-                </button>
-                {!isCancelled && (
-                  <>
-                    <button onClick={toggleArrived}
-                      className={`px-3 py-2 text-sm rounded-lg min-h-[44px] ${r.arrived ? 'bg-green-100 text-green-700 border border-green-300' : 'border border-gray-300 text-gray-600 hover:bg-gray-100'}`}>
-                      {r.arrived ? '✓ Llegó' : 'Marcar llegada'}
-                    </button>
-                    <button onClick={toggleDeparted}
-                      className={`px-3 py-2 text-sm rounded-lg min-h-[44px] ${r.departed ? 'bg-blue-100 text-blue-700 border border-blue-300' : 'border border-gray-300 text-gray-600 hover:bg-gray-100'}`}>
-                      {r.departed ? '⛵ Salió' : 'Marcar salida'}
-                    </button>
-                    <button onClick={cancelRes}
-                      className="px-3 py-2 text-sm border border-red-200 rounded-lg hover:bg-red-50 text-red-600 min-h-[44px]">
-                      ✗ Cancelar
-                    </button>
-                  </>
-                )}
-                {isCancelled && (
-                  <button onClick={reactivate}
-                    className="px-3 py-2 text-sm border border-green-200 rounded-lg hover:bg-green-50 text-green-600 min-h-[44px]">
-                    ↩ Reactivar
-                  </button>
-                )}
-              </div>
-            </>
-          ) : (
-            <EditForm reservation={r} groupIds={allGroupIds} allReservations={allReservations} staffNames={staffNames} onSaved={() => { setEditing(false); router.refresh() }} onCancel={() => setEditing(false)} />
-          )}
+          <EditForm
+            reservation={r}
+            groupMembers={groupMembers}
+            allReservations={allReservations}
+            staffNames={staffNames}
+            onSaved={() => {
+              router.refresh()
+              onClose()
+            }}
+          />
         </div>
       </div>
     </div>
   )
 }
 
-function Detail({ label, value, cancelled, badge, green }: { label: string; value: string; cancelled?: boolean; badge?: boolean; green?: boolean }) {
-  return (
-    <div>
-      <span className="text-xs text-gray-500">{label}</span>
-      <p className={`font-medium ${cancelled ? 'line-through text-gray-400' : green ? 'text-green-700' : 'text-gray-900'}`}>
-        {badge ? <StatusBadge status={value} /> : value}
-      </p>
-    </div>
-  )
-}
-
-function StatusBadge({ status }: { status: string }) {
-  const s: Record<string, string> = { Confirmada: 'bg-green-100 text-green-700', Pendiente: 'bg-amber-100 text-amber-700', Cancelada: 'bg-red-100 text-red-700' }
-  return <span className={`px-2 py-0.5 rounded-full text-xs ${s[status] ?? 'bg-gray-100'}`}>{status}</span>
-}
-
-function EditForm({ reservation: r, groupIds, allReservations, staffNames, onSaved, onCancel }: {
-  reservation: Reservation; groupIds: string[]; allReservations: Reservation[]; staffNames: string[]; onSaved: () => void; onCancel: () => void
+function EditForm({
+  reservation: r,
+  groupMembers,
+  allReservations,
+  staffNames,
+  onSaved,
+}: {
+  reservation: Reservation
+  groupMembers: Reservation[]
+  allReservations: Reservation[]
+  staffNames: string[]
+  onSaved: () => void
 }) {
   const supabase = createClient()
   const [clientName, setClientName] = useState(r.client_name)
   const [email, setEmail] = useState(r.email ?? '')
   const [phone, setPhone] = useState(r.phone ?? '')
-  const [numPeople, setNumPeople] = useState(r.num_people)
   const [time, setTime] = useState(r.time?.slice(0, 5) ?? '')
   const [duration, setDuration] = useState(r.duration_minutes ?? 60)
   const [staff, setStaff] = useState(r.staff ?? '')
   const [office, setOffice] = useState(r.office ?? '')
-  const [status, setStatus] = useState(r.status)
   const [notes, setNotes] = useState(r.notes ?? '')
+  const [incidentType, setIncidentType] = useState(r.incident_type ?? '')
+  const [incidentComment, setIncidentComment] = useState(r.incident_comment ?? '')
+  const [incidentResolution, setIncidentResolution] = useState(r.incident_resolution ?? '')
+  const [refundAmount, setRefundAmount] = useState<string>(
+    r.incident_refund_amount != null ? String(r.incident_refund_amount) : ''
+  )
+  const allGroupIds = groupMembers.length > 0 ? groupMembers.map((m) => m.id) : [r.id]
+  const [affectedIds, setAffectedIds] = useState<string[]>(allGroupIds)
+  const [newDate, setNewDate] = useState(r.date ?? '')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [warning, setWarning] = useState<string | null>(null)
 
-  // Check overlap for a specific jet at new time+duration, excluding this group's own reservations
+  const hasIncident = incidentType !== ''
+  const canSplit = groupMembers.length > 1
+  const showDateChange = hasIncident && incidentResolution === 'Cambio de dia'
+  const isVoucher = hasIncident && incidentResolution === 'Cancelar + generar vale'
+  const isRefund = hasIncident && incidentResolution === 'Cancelar + devolucion'
+  const isCancelling = isVoucher || isRefund
+  const showAmount = isVoucher || isRefund
+  const affectedCount = canSplit ? affectedIds.length : allGroupIds.length
+  const isPartial = hasIncident && incidentResolution !== '' && canSplit && affectedCount < allGroupIds.length
+
+  function toggleAffected(id: string) {
+    setAffectedIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    )
+  }
+
   function findOverlap(jetId: string, newTime: string, newDur: number): boolean {
     const reqStart = timeToMinutes(newTime)
     const reqEnd = reqStart + newDur
     return allReservations.some((res) => {
-      if (groupIds.includes(res.id)) return false // skip own group
+      if (allGroupIds.includes(res.id)) return false
       if (res.jet_id !== jetId || res.status === 'Cancelada') return false
       const bStart = timeToMinutes(res.time?.slice(0, 5) ?? '00:00')
       const bEnd = bStart + (res.duration_minutes ?? 60)
@@ -260,10 +215,8 @@ function EditForm({ reservation: r, groupIds, allReservations, staffNames, onSav
     })
   }
 
-  // Find a free VX for the new time+duration
   function findFreeJet(newTime: string, newDur: number): string | null {
-    const allVX = [...ALL_SIN_TIT_JETS, ...ALL_CON_TIT_JETS]
-    for (const j of allVX) {
+    for (const j of allJets) {
       if (!findOverlap(j.id, newTime, newDur)) return j.id
     }
     return null
@@ -271,131 +224,344 @@ function EditForm({ reservation: r, groupIds, allReservations, staffNames, onSav
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault()
-    setSaving(true); setError(null); setWarning(null)
+    setSaving(true)
+    setError(null)
 
-    // For each jet in the group, check if the new time+duration overlaps
-    const groupReservations = allReservations.filter((res) => groupIds.includes(res.id))
-    const reassignments: { id: string; newJetId: string }[] = []
-    const noAvailability: string[] = []
+    const parsedAmount = refundAmount.trim() === '' ? null : Number(refundAmount)
 
-    for (const res of groupReservations) {
-      if (!res.jet_id) continue
-      if (findOverlap(res.jet_id, time, duration)) {
-        // This jet has a conflict — find another
-        const freeJet = findFreeJet(time, duration)
-        if (freeJet) {
-          reassignments.push({ id: res.id, newJetId: freeJet })
-        } else {
-          noAvailability.push(res.jet_id)
-        }
-      }
+    // Shared client-info fields — always applied to all motos in the group
+    const sharedFields = {
+      client_name: clientName.trim(),
+      email: email || null,
+      phone: phone || null,
+      staff: staff || null,
+      office: office || null,
+      notes: notes || null,
     }
 
+    // Determine which IDs the incident applies to (default = all in group)
+    const incidentIds = hasIncident ? (canSplit ? affectedIds : allGroupIds) : []
+    const untouchedIds = allGroupIds.filter((id) => !incidentIds.includes(id))
+
+    // If changing time+duration on untouched motos, check jet overlaps
+    const reassignments: { id: string; newJetId: string }[] = []
+    const noAvailability: string[] = []
+    for (const id of untouchedIds) {
+      const member = groupMembers.find((m) => m.id === id) ?? r
+      if (!member.jet_id) continue
+      if (findOverlap(member.jet_id, time, duration)) {
+        const freeJet = findFreeJet(time, duration)
+        if (freeJet) reassignments.push({ id, newJetId: freeJet })
+        else noAvailability.push(member.jet_id)
+      }
+    }
     if (noAvailability.length > 0) {
-      const jetLabels = noAvailability.map((id) => allJets.find((j) => j.id === id)?.label ?? id).join(', ')
-      setError(`No hay motos disponibles para reubicar: ${jetLabels}. Cambia la hora o duración.`)
+      const labels = noAvailability.map((id) => allJets.find((j) => j.id === id)?.label ?? id).join(', ')
+      setError(`No hay motos disponibles para reubicar: ${labels}. Cambia la hora o duracion.`)
       setSaving(false)
       return
     }
 
-    // Update shared fields for all in group
-    const { error: err } = await supabase.from('reservations').update({
-      client_name: clientName.trim(), email: email || null, phone: phone || null,
-      num_people: numPeople, time: time + ':00', duration_minutes: duration,
-      staff: staff || null, office: office || null, status, notes: notes || null,
-    }).in('id', groupIds)
-
-    if (err) { setError(err.message); setSaving(false); return }
-
-    // Reassign jets that had conflicts
-    for (const { id, newJetId } of reassignments) {
-      await supabase.from('reservations').update({ jet_id: newJetId }).eq('id', id)
+    // 1) Update untouched members with shared fields + new time/duration (no incident)
+    if (untouchedIds.length > 0) {
+      const untouchedUpdate: Record<string, unknown> = {
+        ...sharedFields,
+        time: time + ':00',
+        duration_minutes: duration,
+        status: 'Confirmada',
+        incident_type: null,
+        incident_comment: null,
+        incident_resolution: null,
+        incident_refund_amount: null,
+        incident_refund_type: null,
+      }
+      const { error: err } = await supabase.from('reservations').update(untouchedUpdate).in('id', untouchedIds)
+      if (err) { setError(err.message); setSaving(false); return }
+      for (const { id, newJetId } of reassignments) {
+        await supabase.from('reservations').update({ jet_id: newJetId }).eq('id', id)
+      }
     }
 
-    setSaving(false)
+    // 2) Update incident members (if any) with incident fields + appropriate status/date/time
+    if (incidentIds.length > 0) {
+      const incidentUpdate: Record<string, unknown> = {
+        ...sharedFields,
+        duration_minutes: duration,
+        status: isCancelling ? 'Cancelada' : 'Confirmada',
+        incident_type: incidentType,
+        incident_comment: incidentComment || null,
+        incident_resolution: incidentResolution || null,
+        incident_refund_amount: showAmount ? parsedAmount : null,
+        incident_refund_type: null,
+      }
+      if (showDateChange) {
+        incidentUpdate.date = newDate || r.date
+        incidentUpdate.time = time + ':00'
+      } else {
+        incidentUpdate.time = time + ':00'
+      }
+      const { error: err } = await supabase.from('reservations').update(incidentUpdate).in('id', incidentIds)
+      if (err) { setError(err.message); setSaving(false); return }
+    }
 
-    // Build change details
-    const changes: string[] = []
-    if (clientName.trim() !== r.client_name) changes.push(`Nombre: ${r.client_name}→${clientName.trim()}`)
-    if (time !== (r.time?.slice(0, 5) ?? '')) changes.push(`Hora: ${r.time?.slice(0, 5)}→${time}`)
-    if (duration !== (r.duration_minutes ?? 60)) changes.push(`Duración: ${durationLabel(r.duration_minutes ?? 60)}→${durationLabel(duration)}`)
-    if (numPeople !== r.num_people) changes.push(`Personas: ${r.num_people}→${numPeople}`)
-    if ((staff || null) !== r.staff) changes.push(`Staff: ${r.staff ?? '—'}→${staff || '—'}`)
-    if ((office || null) !== r.office) changes.push(`Oficina: ${r.office ?? '—'}→${office || '—'}`)
-    if (status !== r.status) changes.push(`Estado: ${r.status}→${status}`)
-    if ((email || null) !== r.email) changes.push('Email cambiado')
-    if ((phone || null) !== r.phone) changes.push('Teléfono cambiado')
-    if ((notes || null) !== r.notes) changes.push('Notas cambiadas')
-    if (reassignments.length > 0) changes.push(`Motos reubicadas: ${reassignments.length}`)
-
+    // Audit
     logAudit({
       reservationId: r.id,
       action: 'modified',
       activityType: 'jets',
       clientName: clientName.trim(),
       performedBy: staff || undefined,
-      details: changes.length > 0 ? changes.join(', ') : 'Sin cambios detectados',
+      details: hasIncident
+        ? `Incidencia ${isPartial ? 'parcial' : 'total'}: ${incidentIds.length}/${allGroupIds.length} motos · ${incidentResolution}${parsedAmount != null ? ` · ${parsedAmount}€` : ''}`
+        : 'Datos actualizados',
     })
 
-    if (reassignments.length > 0) {
-      const moves = reassignments.map(({ id, newJetId }) => {
-        const oldJet = groupReservations.find((res) => res.id === id)
-        const oldLabel = allJets.find((j) => j.id === oldJet?.jet_id)?.label ?? '?'
-        const newLabel = allJets.find((j) => j.id === newJetId)?.label ?? '?'
-        return `${oldLabel} → ${newLabel}`
-      }).join(', ')
-      alert(`Reserva guardada. Motos reubicadas por solapamiento: ${moves}`)
-    }
-
+    setSaving(false)
     onSaved()
   }
 
+  const unitLabel = 'motos'
+
   return (
     <form onSubmit={handleSave} className="space-y-3">
-      <div className="grid grid-cols-2 gap-2">
-        <Field label="Nombre"><input type="text" required value={clientName} onChange={(e) => setClientName(e.target.value)} className="inp" /></Field>
-        <Field label="Teléfono *"><input type="tel" required value={phone} onChange={(e) => setPhone(e.target.value)} className="inp" /></Field>
-        <Field label="Email"><input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="inp" /></Field>
-        <Field label="Personas"><input type="number" min={1} value={numPeople} onChange={(e) => setNumPeople(Number(e.target.value))} className="inp" /></Field>
+      <p className="text-xs text-gray-500">Edicion de reserva</p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2">
+        <Field label="Nombre">
+          <input type="text" required value={clientName} onChange={(e) => setClientName(e.target.value)} className="inp" />
+        </Field>
+        <Field label="Teléfono *">
+          <input type="tel" required value={phone} onChange={(e) => setPhone(e.target.value)} className="inp" />
+        </Field>
+        <Field label="Email">
+          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="inp" />
+        </Field>
+        <Field label="N Motos">
+          <input
+            type="number"
+            value={allGroupIds.length}
+            disabled
+            className="inp bg-gray-100 text-gray-500 cursor-not-allowed"
+            title="Para reducir, crea una incidencia y ajusta las motos afectadas"
+          />
+        </Field>
         <Field label="Hora">
           <select value={time} onChange={(e) => setTime(e.target.value)} className="inp">
-            {JETS_SLOTS.map((t) => <option key={t} value={t}>{t}</option>)}
+            {JETS_SLOTS.map((t) => (
+              <option key={t} value={t}>{t}</option>
+            ))}
           </select>
         </Field>
-        <Field label="Duración (min)"><input type="number" min={10} step={10} value={duration} onChange={(e) => setDuration(Number(e.target.value))} className="inp" /></Field>
+        <Field label="Duracion (min)">
+          <input type="number" min={10} step={10} value={duration} onChange={(e) => setDuration(Number(e.target.value))} className="inp" />
+        </Field>
         <Field label="Atendido por *">
           <select value={staff} onChange={(e) => setStaff(e.target.value)} className="inp" required>
-            <option value="">—</option>
-            {staffNames.map((n) => <option key={n} value={n}>{n}</option>)}
+            <option value="">--</option>
+            {staffNames.map((n) => (
+              <option key={n} value={n}>{n}</option>
+            ))}
           </select>
         </Field>
         <Field label="Oficina">
           <select value={office} onChange={(e) => setOffice(e.target.value)} className="inp">
-            <option value="">—</option>
-            {OFFICES.map((o) => <option key={o} value={o}>{o}</option>)}
+            <option value="">--</option>
+            {OFFICES.map((o) => (
+              <option key={o} value={o}>{o}</option>
+            ))}
           </select>
         </Field>
-        <Field label="Estado">
-          <select value={status} onChange={(e) => setStatus(e.target.value)} className="inp">
-            {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
-          </select>
-        </Field>
+        <div className="col-span-full">
+          <Field label="Notas">
+            <input type="text" value={notes} onChange={(e) => setNotes(e.target.value)} className="inp" placeholder="Notas..." />
+          </Field>
+        </div>
       </div>
-      <Field label="Notas"><input type="text" value={notes} onChange={(e) => setNotes(e.target.value)} className="inp" placeholder="Notas..." /></Field>
+
+      {/* Incident section */}
+      <div className="mt-3 pt-3 border-t border-gray-200">
+        <h4 className="text-xs font-semibold text-gray-700 mb-2">Incidencia</h4>
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2">
+          <Field label="Tipo de incidencia">
+            <select value={incidentType} onChange={(e) => setIncidentType(e.target.value)} className="inp">
+              <option value="">Sin incidencia</option>
+              {INCIDENT_TYPES.map((t) => (
+                <option key={t} value={t}>{t}</option>
+              ))}
+            </select>
+          </Field>
+          {hasIncident && (
+            <div className="col-span-full sm:col-span-3">
+              <Field label="Comentario incidencia">
+                <textarea
+                  value={incidentComment}
+                  onChange={(e) => setIncidentComment(e.target.value)}
+                  className="inp"
+                  placeholder="Detalles de la incidencia..."
+                  rows={2}
+                  style={{ resize: 'vertical' }}
+                />
+              </Field>
+            </div>
+          )}
+        </div>
+
+        {/* Step 1: affected scope (only if group has >1 moto) */}
+        {hasIncident && canSplit && (
+          <div className="mt-3">
+            <p className="text-xs font-semibold text-gray-700 mb-2">
+              1. ¿A cuantas {unitLabel} afecta la incidencia?
+            </p>
+            <div className="flex items-center gap-2 flex-wrap mb-2">
+              <button
+                type="button"
+                onClick={() => setAffectedIds(allGroupIds)}
+                className={`px-3 py-2 text-sm rounded-lg border font-medium min-h-[44px] ${
+                  affectedCount === allGroupIds.length
+                    ? 'bg-sky-600 border-sky-600 text-white'
+                    : 'bg-white border-gray-300 text-gray-700 hover:bg-sky-50'
+                }`}
+              >
+                Todas las motos ({allGroupIds.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setAffectedIds(allGroupIds.slice(0, 1))}
+                className={`px-3 py-2 text-sm rounded-lg border font-medium min-h-[44px] ${
+                  affectedCount < allGroupIds.length
+                    ? 'bg-sky-600 border-sky-600 text-white'
+                    : 'bg-white border-gray-300 text-gray-700 hover:bg-sky-50'
+                }`}
+              >
+                Parcial
+              </button>
+            </div>
+            {affectedCount < allGroupIds.length && (
+              <div className="p-2 border border-sky-200 bg-sky-50 rounded-lg">
+                <p className="text-xs text-gray-600 mb-1">Marca las motos afectadas:</p>
+                <div className="flex flex-wrap gap-2">
+                  {groupMembers.map((m) => {
+                    const j = allJets.find((jt) => jt.id === m.jet_id)
+                    const checked = affectedIds.includes(m.id)
+                    return (
+                      <label key={m.id} className={`px-2 py-1.5 rounded-lg text-xs border cursor-pointer flex items-center gap-1.5 ${
+                        checked ? 'bg-amber-100 border-amber-400 text-amber-800' : 'bg-white border-gray-300 text-gray-700'
+                      }`}>
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => toggleAffected(m.id)}
+                          className="accent-amber-600"
+                        />
+                        {j?.label ?? m.jet_id ?? '?'}
+                      </label>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Step 2: resolution */}
+        {hasIncident && (
+          <div className="mt-3">
+            <p className="text-xs font-semibold text-gray-700 mb-2">
+              {canSplit ? '2. ' : ''}Solucion de la incidencia
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {INCIDENT_RESOLUTIONS.map((o) => {
+                const active = incidentResolution === o
+                return (
+                  <button
+                    key={o}
+                    type="button"
+                    onClick={() => setIncidentResolution(active ? '' : o)}
+                    className={`px-3 py-2 text-sm rounded-lg border font-medium min-h-[44px] ${
+                      active
+                        ? 'bg-amber-600 border-amber-600 text-white'
+                        : 'bg-white border-gray-300 text-gray-700 hover:bg-amber-50 hover:border-amber-400'
+                    }`}
+                  >
+                    {o}
+                  </button>
+                )
+              })}
+            </div>
+            {isRefund && (
+              <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                Antes de procesar una devolucion, intenta ofrecer al cliente un cambio de dia o un vale.
+              </div>
+            )}
+            {incidentResolution && (
+              <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2">
+                {showDateChange && (
+                  <>
+                    <Field label="Nuevo dia">
+                      <input type="date" value={newDate} onChange={(e) => setNewDate(e.target.value)} className="inp" />
+                    </Field>
+                    <Field label="Nueva hora">
+                      <select value={time} onChange={(e) => setTime(e.target.value)} className="inp">
+                        {JETS_SLOTS.map((t) => (
+                          <option key={t} value={t}>{t}</option>
+                        ))}
+                      </select>
+                    </Field>
+                  </>
+                )}
+                {showAmount && (
+                  <Field label={isVoucher ? 'Importe del vale (€)' : 'Importe a devolver (€)'}>
+                    <input
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      value={refundAmount}
+                      onChange={(e) => setRefundAmount(e.target.value)}
+                      className="inp"
+                      placeholder="0.00"
+                    />
+                  </Field>
+                )}
+              </div>
+            )}
+            {isPartial && (
+              <p className="mt-2 text-xs text-sky-700">
+                {allGroupIds.length - affectedCount} {unitLabel} permaneceran, {affectedCount} {unitLabel} con incidencia.
+              </p>
+            )}
+            {isCancelling && !isPartial && (
+              <p className="mt-2 text-xs text-gray-600">
+                Al guardar, {canSplit ? 'todas las motos quedaran' : 'la reserva quedara'} marcada como Cancelada.
+              </p>
+            )}
+          </div>
+        )}
+      </div>
+
       {error && <p className="text-sm text-red-600">{error}</p>}
-      <div className="flex gap-2">
-        <button type="submit" disabled={saving} className="px-4 py-2 bg-sky-600 hover:bg-sky-700 disabled:bg-gray-400 text-white text-sm rounded-lg font-medium min-h-[44px]">
+      <div className="mt-3 pt-3 border-t border-gray-200">
+        <button
+          type="submit"
+          disabled={saving}
+          className="px-4 py-2.5 sm:py-2 bg-sky-600 hover:bg-sky-700 disabled:bg-gray-400 text-white text-sm rounded-lg font-medium min-h-[44px] sm:min-h-0 w-full sm:w-auto"
+        >
           {saving ? 'Guardando...' : 'Guardar cambios'}
         </button>
-        <button type="button" onClick={onCancel} className="px-4 py-2 border border-gray-300 text-gray-700 text-sm rounded-lg hover:bg-gray-50 min-h-[44px]">
-          Cancelar
-        </button>
       </div>
-      <style>{`.inp{width:100%;padding:0.375rem 0.5rem;border:1px solid #d1d5db;border-radius:0.5rem;font-size:0.8rem;color:#111827;outline:none;min-height:36px}.inp:focus{border-color:transparent;box-shadow:0 0 0 2px #0ea5e9}`}</style>
+      <style>{`
+        .inp { width: 100%; padding: 0.625rem 0.5rem; border: 1px solid #d1d5db; border-radius: 0.5rem; font-size: 0.8rem; color: #111827; outline: none; min-height: 44px; }
+        @media (min-width: 640px) { .inp { padding: 0.375rem 0.5rem; min-height: auto; } }
+        .inp:focus { border-color: transparent; box-shadow: 0 0 0 2px #0ea5e9; }
+        textarea.inp { min-height: 60px; }
+      `}</style>
     </form>
   )
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return <label className="block"><span className="block text-xs text-gray-500 mb-0.5">{label}</span>{children}</label>
+  return (
+    <label className="block">
+      <span className="block text-xs text-gray-500 mb-0.5">{label}</span>
+      {children}
+    </label>
+  )
 }
