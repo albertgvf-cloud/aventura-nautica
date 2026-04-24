@@ -78,7 +78,7 @@ export default function PlanningView({
   const isJets = activeTab === 'jets'
 
   function changeDate(offset: number) {
-    const d = new Date(date)
+    const d = new Date(date + 'T00:00:00')
     d.setDate(d.getDate() + offset)
     router.push(`/planning?date=${d.toISOString().slice(0, 10)}&tab=${activeTab}`)
     router.refresh()

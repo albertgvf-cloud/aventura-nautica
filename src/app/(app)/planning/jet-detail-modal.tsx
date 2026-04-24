@@ -245,7 +245,14 @@ function EditForm({
       }
     }
 
-    const parsedAmount = refundAmount.trim() === '' ? null : Number(refundAmount)
+    const trimmedAmount = refundAmount.trim()
+    const parsedAmountRaw = trimmedAmount === '' ? null : Number(trimmedAmount)
+    if (parsedAmountRaw != null && Number.isNaN(parsedAmountRaw)) {
+      setError('El importe no es un numero valido.')
+      setSaving(false)
+      return
+    }
+    const parsedAmount = parsedAmountRaw
 
     // Shared client-info fields — always applied to all motos in the group
     const sharedFields = {

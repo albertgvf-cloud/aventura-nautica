@@ -470,7 +470,14 @@ function EditForm({
       }
     }
 
-    const parsedAmount = refundAmount.trim() === '' ? null : Number(refundAmount)
+    const trimmedAmount = refundAmount.trim()
+    const parsedAmountRaw = trimmedAmount === '' ? null : Number(trimmedAmount)
+    if (parsedAmountRaw != null && Number.isNaN(parsedAmountRaw)) {
+      setError('El importe no es un numero valido.')
+      setSaving(false)
+      return
+    }
+    const parsedAmount = parsedAmountRaw
 
     // Shared client-info fields (apply to all rows we touch)
     const clientFields = {
@@ -518,11 +525,27 @@ function EditForm({
         incident_authorized_by: authorizedBy || null,
       }
 
-      const { error: updErr } = await supabase.from('reservations').update(originalUpdate).eq('id', r.id)
-      if (updErr) { setSaving(false); setError(updErr.message); return }
-
+      // Step 1: insert the new row FIRST so a failure leaves the original untouched
       const { error: insErr } = await supabase.from('reservations').insert(newRow)
       if (insErr) { setSaving(false); setError(insErr.message); return }
+
+      // Step 2: update the original to subtract affected people
+      const { error: updErr } = await supabase.from('reservations').update(originalUpdate).eq('id', r.id)
+      if (updErr) {
+        // Best-effort rollback: delete the just-inserted row by matching its unique fields
+        await supabase
+          .from('reservations')
+          .delete()
+          .match({
+            activity_type: newRow.activity_type,
+            activity: newRow.activity,
+            date: newRow.date,
+            time: newRow.time,
+            client_name: newRow.client_name,
+            num_people: newRow.num_people,
+          })
+        setSaving(false); setError(updErr.message); return
+      }
 
       logAudit({
         reservationId: r.id,
