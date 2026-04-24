@@ -769,11 +769,11 @@ function JetsPrintTimeline({
                 return (
                   <div
                     key={startMinute}
-                    className={`absolute top-0.5 bottom-0.5 flex items-center justify-center text-[9px] font-bold ${
-                      count === 0 ? 'text-gray-300' :
-                      count >= 3 ? 'bg-red-200 text-red-900' :
-                      count >= 2 ? 'bg-amber-200 text-amber-900' :
-                      'bg-blue-200 text-blue-900'
+                    className={`absolute top-0.5 bottom-0.5 flex items-center justify-center text-[10px] font-bold text-black ${
+                      count === 0 ? '' :
+                      count >= 3 ? 'bg-red-200' :
+                      count >= 2 ? 'bg-amber-200' :
+                      'bg-blue-200'
                     }`}
                     style={{ left: px(startMinute), width: slotW }}
                     title={`${count} monitor${count !== 1 ? 'es' : ''} a las ${timeLabel}`}
