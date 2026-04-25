@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { ACTIVITIES, PARASAILING, JETS } from '@/lib/config'
+import { formatDateLong } from '@/lib/date'
 import Link from 'next/link'
 
 type Reservation = {
@@ -146,9 +147,7 @@ export default async function DashboardPage({
 
   // Format date
   const dateObj = new Date(selectedDate + 'T00:00:00')
-  const dayNames = ['Domingo', 'Lunes', 'Martes', 'Miercoles', 'Jueves', 'Viernes', 'Sabado']
-  const monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
-  const dateLabel = `${dayNames[dateObj.getDay()]}, ${dateObj.getDate()} ${monthNames[dateObj.getMonth()]} ${dateObj.getFullYear()}`
+  const dateLabel = formatDateLong(selectedDate)
 
   const prevDate = new Date(dateObj); prevDate.setDate(prevDate.getDate() - 1)
   const nextDate = new Date(dateObj); nextDate.setDate(nextDate.getDate() + 1)

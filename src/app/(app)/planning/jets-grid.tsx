@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { JETS, ALL_SIN_TIT_JETS, ALL_CON_TIT_JETS, JETS_SLOTS, durationLabel, durationShort, timeToMinutes, addMinutesToTime } from '@/lib/config'
+import { formatDateLong } from '@/lib/date'
 import JetDetailModal from './jet-detail-modal'
 import JetQuickBook from './jet-quick-book'
 
@@ -620,10 +621,7 @@ function JetsPrintTimeline({
     instructorSlots.push({ startMinute: m, count: peak })
   }
 
-  const dateObj = new Date(date + 'T00:00:00')
-  const dayNames = ['Domingo', 'Lunes', 'Martes', 'Miercoles', 'Jueves', 'Viernes', 'Sabado']
-  const monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
-  const dateLabel = `${dayNames[dateObj.getDay()]}, ${dateObj.getDate()} ${monthNames[dateObj.getMonth()]} ${dateObj.getFullYear()}`
+  const dateLabel = formatDateLong(date)
   const totalMotos = reservations.length
 
   function Bar({ r }: { r: Reservation }) {

@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { ALL_SIN_TIT_JETS, ALL_CON_TIT_JETS } from '@/lib/config'
+import { formatDateResumen } from '@/lib/date'
 import ResumenClient from './resumen-client'
 
 type Reservation = {
@@ -44,10 +45,7 @@ export default async function ResumenPage({
 
   const reservations: Reservation[] = data ?? []
 
-  const dateObj = new Date(selectedDate + 'T00:00:00')
-  const dayNames = ['Domingo', 'Lunes', 'Martes', 'Miercoles', 'Jueves', 'Viernes', 'Sabado']
-  const monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
-  const dateLabel = `${dayNames[dateObj.getDay()]} ${dateObj.getDate()} ${monthNames[dateObj.getMonth()]}`
+  const dateLabel = formatDateResumen(selectedDate)
 
   // ===== Build text sections =====
   const nauticRes = reservations

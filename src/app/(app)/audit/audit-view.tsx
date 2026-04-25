@@ -1,6 +1,7 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
+import { formatDateLong } from '@/lib/date'
 
 type AuditLog = {
   id: string
@@ -72,10 +73,7 @@ export default function AuditView({
     staffBreakdown[name][log.action] = (staffBreakdown[name][log.action] ?? 0) + 1
   }
 
-  const dateObj = new Date(date + 'T00:00:00')
-  const dayNames = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
-  const monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
-  const dateLabel = `${dayNames[dateObj.getDay()]}, ${dateObj.getDate()} ${monthNames[dateObj.getMonth()]} ${dateObj.getFullYear()}`
+  const dateLabel = formatDateLong(date)
 
   return (
     <div className="flex flex-col h-full">

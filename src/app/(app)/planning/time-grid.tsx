@@ -3,6 +3,7 @@
 import { Fragment, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
+import { formatDateLong } from '@/lib/date'
 
 type Activity = { name: string; capacity: number; hardMax: number; color: string }
 type Reservation = {
@@ -461,10 +462,7 @@ function ActivitiesPrintView({
   timeSlots: string[]
   date: string
 }) {
-  const dateObj = new Date(date + 'T00:00:00')
-  const dayNames = ['Domingo', 'Lunes', 'Martes', 'Miercoles', 'Jueves', 'Viernes', 'Sabado']
-  const monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
-  const dateLabel = `${dayNames[dateObj.getDay()]}, ${dateObj.getDate()} ${monthNames[dateObj.getMonth()]} ${dateObj.getFullYear()}`
+  const dateLabel = formatDateLong(date)
   const active = reservations.filter((r) => r.status !== 'Cancelada')
   const totalRes = active.length
   const totalPeople = active.reduce((s, r) => s + r.num_people, 0)

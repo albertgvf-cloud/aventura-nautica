@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { PARASAILING, PARASAILING_SLOTS } from '@/lib/config'
+import { formatDateLong } from '@/lib/date'
 
 type Reservation = {
   id: string
@@ -515,10 +516,7 @@ export default function ParasailingGrid({
 }
 
 function ParasailingPrintView({ reservations, date }: { reservations: Reservation[]; date: string }) {
-  const dateObj = new Date(date + 'T00:00:00')
-  const dayNames = ['Domingo', 'Lunes', 'Martes', 'Miercoles', 'Jueves', 'Viernes', 'Sabado']
-  const monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
-  const dateLabel = `${dayNames[dateObj.getDay()]}, ${dateObj.getDate()} ${monthNames[dateObj.getMonth()]} ${dateObj.getFullYear()}`
+  const dateLabel = formatDateLong(date)
   const active = reservations.filter((r) => r.status !== 'Cancelada' && r.activity === 'Parasailing')
 
   function slotRes(slot: string) {
