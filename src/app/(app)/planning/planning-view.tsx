@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ACTIVITY_TYPES, ACTIVITIES, TIME_SLOTS, PARASAILING_SLOTS } from '@/lib/config'
-import { formatDateLong, formatDateShort } from '@/lib/date'
+import { formatDateLong, formatDateShort, addDays } from '@/lib/date'
 import TimeGrid from './time-grid'
 import ParasailingGrid from './parasailing-grid'
 import JetsGrid from './jets-grid'
@@ -79,9 +79,7 @@ export default function PlanningView({
   const isJets = activeTab === 'jets'
 
   function changeDate(offset: number) {
-    const d = new Date(date + 'T00:00:00')
-    d.setDate(d.getDate() + offset)
-    router.push(`/planning?date=${d.toISOString().slice(0, 10)}&tab=${activeTab}`)
+    router.push(`/planning?date=${addDays(date, offset)}&tab=${activeTab}`)
     router.refresh()
   }
 

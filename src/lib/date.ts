@@ -34,3 +34,16 @@ export function formatDateResumen(dateStr: string): string {
   const d = parse(dateStr)
   return `${DAY_NAMES[d.getDay()]} ${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`
 }
+
+// "YYYY-MM-DD" using LOCAL date components — never use date.toISOString().slice(0, 10)
+// because that returns the UTC day, which can be off-by-one in non-UTC timezones.
+export function toYMD(d: Date): string {
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+}
+
+// Add (or subtract) days from a YYYY-MM-DD string and return the new YYYY-MM-DD.
+export function addDays(dateStr: string, offset: number): string {
+  const d = parse(dateStr)
+  d.setDate(d.getDate() + offset)
+  return toYMD(d)
+}

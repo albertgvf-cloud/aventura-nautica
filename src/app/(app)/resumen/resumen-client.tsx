@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { addDays } from '@/lib/date'
 
 export default function ResumenClient({
   text,
@@ -33,11 +34,8 @@ export default function ResumenClient({
     window.open(`https://wa.me/?text=${encoded}`, '_blank')
   }
 
-  const dateObj = new Date(selectedDate + 'T00:00:00')
-  const prevDate = new Date(dateObj)
-  prevDate.setDate(prevDate.getDate() - 1)
-  const nextDate = new Date(dateObj)
-  nextDate.setDate(nextDate.getDate() + 1)
+  const prevYMD = addDays(selectedDate, -1)
+  const nextYMD = addDays(selectedDate, 1)
 
   return (
     <div className="p-3 sm:p-6 overflow-auto h-full">
@@ -48,7 +46,7 @@ export default function ResumenClient({
         </div>
         <form method="get" className="flex items-center gap-2 flex-wrap">
           <Link
-            href={`/resumen?date=${prevDate.toISOString().slice(0, 10)}`}
+            href={`/resumen?date=${prevYMD}`}
             className="px-2 py-1.5 border border-gray-300 rounded-lg text-sm hover:bg-gray-100"
           >
             ←
@@ -66,7 +64,7 @@ export default function ResumenClient({
             Ver
           </button>
           <Link
-            href={`/resumen?date=${nextDate.toISOString().slice(0, 10)}`}
+            href={`/resumen?date=${nextYMD}`}
             className="px-2 py-1.5 border border-gray-300 rounded-lg text-sm hover:bg-gray-100"
           >
             →

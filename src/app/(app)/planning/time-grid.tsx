@@ -15,6 +15,7 @@ type Reservation = {
   status: string
   arrived: boolean
   departed: boolean
+  notes: string | null
 }
 
 export default function TimeGrid({
@@ -101,6 +102,11 @@ export default function TimeGrid({
                 {r.client_name}
               </span>
               <span className="text-xs text-gray-400">{r.num_people} pax</span>
+              {r.notes && (
+                <span title={r.notes} className="text-xs bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded font-bold">
+                  📝
+                </span>
+              )}
             </div>
             <div className="flex gap-1 shrink-0">
               <button
@@ -202,12 +208,13 @@ export default function TimeGrid({
               </thead>
               <tbody>
                 {timeSlots.map((slot, slotIdx) => {
-                  const { people, arrivedPeople, total, arrivedCount, allDeparted } = getSlotData(slot, currentMobileActivity.name)
+                  const { people, arrivedPeople, total, arrivedCount, allDeparted, slotReservations } = getSlotData(slot, currentMobileActivity.name)
                   const available = Math.max(0, currentMobileActivity.capacity - people)
                   const pct = currentMobileActivity.capacity > 0 ? Math.round((people / currentMobileActivity.capacity) * 100) : 0
                   const overCapacity = people > currentMobileActivity.capacity
                   const overHardMax = people > currentMobileActivity.hardMax
                   const hasBookings = people > 0
+                  const hasNotes = slotReservations.some((r) => r.notes && r.notes.trim() !== '')
                   const allArrived = hasBookings && arrivedCount === total
                   const someArrived = hasBookings && arrivedCount > 0 && arrivedCount < total
                   const isExpanded = expandedSlot?.slot === slot && expandedSlot?.activity === currentMobileActivity.name
@@ -233,7 +240,10 @@ export default function TimeGrid({
                           }`}
                           onClick={() => onSlotClick(slot, currentMobileActivity.name)}
                         >
-                          {hasBookings ? people : '+'}
+                          <span className="inline-flex items-center gap-1 justify-center">
+                            {hasBookings ? people : '+'}
+                            {hasNotes && <span className="text-amber-600">📝</span>}
+                          </span>
                         </td>
                         <td className={`px-2 py-2.5 text-center ${cellBg} ${
                           overHardMax ? 'text-red-600 font-bold' :
@@ -335,12 +345,14 @@ export default function TimeGrid({
                   <tr className={`hover:bg-sky-50/30 ${slotIdx % 2 === 0 ? '' : 'bg-gray-50/30'}`}>
                     <td className="px-3 py-2 font-mono text-gray-700 font-medium border-r border-gray-200 sticky left-0 bg-white z-10">{slot}</td>
                     {activities.map((a, i) => {
-                      const { people, arrivedPeople, total, arrivedCount, allDeparted } = getSlotData(slot, a.name)
+                      const { people, arrivedPeople, total, arrivedCount, allDeparted, slotReservations } = getSlotData(slot, a.name)
                       const available = Math.max(0, a.capacity - people)
                       const pct = a.capacity > 0 ? Math.round((people / a.capacity) * 100) : 0
                       const overCapacity = people > a.capacity
                       const overHardMax = people > a.hardMax
                       const hasBookings = people > 0
+                      const hasNotes = slotReservations.some((r) => r.notes && r.notes.trim() !== '')
+                      const slotNotesText = slotReservations.filter((r) => r.notes).map((r) => `${r.client_name}: ${r.notes}`).join('\n')
                       const allArrived = hasBookings && arrivedCount === total
                       const someArrived = hasBookings && arrivedCount > 0 && arrivedCount < total
 
@@ -363,9 +375,12 @@ export default function TimeGrid({
                               hasBookings ? 'text-sky-700' : 'text-gray-400 hover:text-sky-600'
                             }`}
                             onClick={() => onSlotClick(slot, a.name)}
-                            title={hasBookings ? `${arrivedCount}/${total} llegaron — clic para detalle` : 'Clic para añadir reserva'}
+                            title={hasBookings ? `${arrivedCount}/${total} llegaron — clic para detalle${hasNotes ? '\n\nNotas:\n' + slotNotesText : ''}` : 'Clic para añadir reserva'}
                           >
-                            {hasBookings ? people : '+'}
+                            <span className="inline-flex items-center gap-1 justify-center">
+                              {hasBookings ? people : '+'}
+                              {hasNotes && <span className="text-amber-600" title={slotNotesText}>📝</span>}
+                            </span>
                           </td>
                           {/* Available */}
                           <td className={`px-2 py-2 text-center ${cellBg} ${

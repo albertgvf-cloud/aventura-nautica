@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { ALL_SIN_TIT_JETS, ALL_CON_TIT_JETS } from '@/lib/config'
-import { formatDateResumen } from '@/lib/date'
+import { formatDateResumen, toYMD } from '@/lib/date'
 import ResumenClient from './resumen-client'
 
 type Reservation = {
@@ -32,7 +32,7 @@ export default async function ResumenPage({
   searchParams: Promise<{ date?: string }>
 }) {
   const params = await searchParams
-  const today = new Date().toISOString().slice(0, 10)
+  const today = toYMD(new Date())
   const selectedDate = params.date ?? today
 
   const supabase = await createClient()

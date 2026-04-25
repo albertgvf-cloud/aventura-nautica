@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { ACTIVITIES, PARASAILING, JETS } from '@/lib/config'
-import { formatDateLong } from '@/lib/date'
+import { formatDateLong, addDays, toYMD } from '@/lib/date'
 import Link from 'next/link'
 
 type Reservation = {
@@ -45,7 +45,7 @@ export default async function DashboardPage({
   searchParams: Promise<{ date?: string }>
 }) {
   const params = await searchParams
-  const today = new Date().toISOString().slice(0, 10)
+  const today = toYMD(new Date())
   const selectedDate = params.date ?? today
   const dayStart = `${selectedDate}T00:00:00`
   const dayEnd = `${selectedDate}T23:59:59.999`
@@ -146,11 +146,9 @@ export default async function DashboardPage({
   const nauticActivities = ACTIVITIES.nautic ?? []
 
   // Format date
-  const dateObj = new Date(selectedDate + 'T00:00:00')
   const dateLabel = formatDateLong(selectedDate)
-
-  const prevDate = new Date(dateObj); prevDate.setDate(prevDate.getDate() - 1)
-  const nextDate = new Date(dateObj); nextDate.setDate(nextDate.getDate() + 1)
+  const prevYMD = addDays(selectedDate, -1)
+  const nextYMD = addDays(selectedDate, 1)
 
   return (
     <div className="p-3 sm:p-6 overflow-auto h-full">
@@ -162,7 +160,7 @@ export default async function DashboardPage({
         </div>
         <form method="get" className="flex items-center gap-2">
           <Link
-            href={`/dashboard?date=${prevDate.toISOString().slice(0, 10)}`}
+            href={`/dashboard?date=${prevYMD}`}
             className="px-2 py-1.5 border border-gray-300 rounded-lg text-sm hover:bg-gray-100"
           >
             ←
@@ -180,7 +178,7 @@ export default async function DashboardPage({
             Ver
           </button>
           <Link
-            href={`/dashboard?date=${nextDate.toISOString().slice(0, 10)}`}
+            href={`/dashboard?date=${nextYMD}`}
             className="px-2 py-1.5 border border-gray-300 rounded-lg text-sm hover:bg-gray-100"
           >
             →

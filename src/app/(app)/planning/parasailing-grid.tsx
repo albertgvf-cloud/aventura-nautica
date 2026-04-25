@@ -19,6 +19,7 @@ type Reservation = {
   departed: boolean
   staff: string | null
   office: string | null
+  notes: string | null
   incident_type: string | null
   incident_comment: string | null
   incident_resolution: string | null
@@ -283,6 +284,14 @@ export default function ParasailingGrid({
                     </span>
                   )}
                   <span className="text-[10px] sm:text-xs text-gray-400 ml-1">— {estimatedEnd}</span>
+                  {blockReservations.some((r) => r.notes && r.notes.trim()) && (
+                    <span
+                      className="ml-1.5 text-amber-600"
+                      title={blockReservations.filter((r) => r.notes).map((r) => `${r.client_name}: ${r.notes}`).join('\n')}
+                    >
+                      📝
+                    </span>
+                  )}
                 </div>
 
                 {/* Capacity bar */}
@@ -424,6 +433,11 @@ export default function ParasailingGrid({
                                 {r.client_name}
                               </span>
                               <span className="text-xs font-semibold text-purple-600">{r.num_people} pax</span>
+                              {r.notes && (
+                                <span title={r.notes} className="text-xs bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded font-bold">
+                                  📝 nota
+                                </span>
+                              )}
                               {r.departed && !r.arrived && (
                                 <span className="text-[10px] text-amber-600">⚠ no llegó</span>
                               )}

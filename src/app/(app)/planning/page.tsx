@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { toYMD } from '@/lib/date'
 import PlanningView from './planning-view'
 
 export default async function PlanningPage({
@@ -9,7 +10,7 @@ export default async function PlanningPage({
   const { date: dateParam, tab } = await searchParams
   const supabase = await createClient()
 
-  const date = dateParam || new Date().toISOString().slice(0, 10)
+  const date = dateParam || toYMD(new Date())
 
   const [{ data: reservations }, { data: employees }, { data: notices }, { data: me }] = await Promise.all([
     supabase.from('reservations').select('*').eq('date', date).order('time'),
