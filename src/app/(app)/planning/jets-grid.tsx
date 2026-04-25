@@ -323,9 +323,9 @@ export default function JetsGrid({
             <div key={b.id}
               className={`absolute rounded-lg flex items-center justify-center px-2 text-[11px] font-semibold text-white shadow-md cursor-pointer overflow-hidden ${b.arrived && !b.departed ? 'border-2 border-yellow-300 ring-2 ring-yellow-300/50' : 'border border-white/30'} ${b.arrived && !b.departed ? 'bg-yellow-500 hover:bg-yellow-600' : `${color.bg} ${color.hover}`} ${b.departed ? 'opacity-50' : ''}`}
               style={{ left: px(bStart), width: px(bStart + dur) - px(bStart), minWidth: 44, top: 4, bottom: 4 }}
-              title={`${b.client_name} · ${b.activity} · ${b.time?.slice(0, 5)}–${addMinutesToTime(b.time?.slice(0, 5) ?? '09:00', dur)}${b.arrived ? ' · ✓ CLIENTE AQUÍ' : ''}`}
+              title={`${b.client_name} · ${b.activity} · ${b.time?.slice(0, 5)}–${addMinutesToTime(b.time?.slice(0, 5) ?? '09:00', dur)}${b.arrived ? ' · ✓ CLIENTE AQUÍ' : ''}${b.notes ? '\n📝 ' + b.notes : ''}`}
               onClick={(e) => { e.stopPropagation(); setSelectedRes(b) }}>
-              <span className="truncate">{b.arrived && !b.departed ? '📍 ' : ''}<strong>{durationShort(dur)}</strong> {b.client_name}</span>
+              <span className="truncate">{b.arrived && !b.departed ? '📍 ' : ''}<strong>{durationShort(dur)}</strong> {b.client_name}{b.notes ? ' 📝' : ''}</span>
             </div>
           )
         })}
@@ -357,9 +357,9 @@ export default function JetsGrid({
             <div key={b.id}
               className={`absolute rounded-lg flex items-center justify-center px-2 text-[11px] font-semibold text-white shadow-md cursor-pointer overflow-hidden ${b.arrived && !b.departed ? 'border-2 border-yellow-300 ring-2 ring-yellow-300/50' : 'border border-white/30'} ${b.arrived && !b.departed ? 'bg-yellow-500 hover:bg-yellow-600' : `${color.bg} ${color.hover}`} ${b.departed ? 'opacity-50' : ''}`}
               style={{ left: px(bStart), width: px(bStart + dur) - px(bStart), minWidth: 44, top: 4, bottom: 4 }}
-              title={`${b.client_name} · ${b.activity} · ${b.time?.slice(0, 5)}–${addMinutesToTime(b.time?.slice(0, 5) ?? '09:00', dur)}${b.arrived ? ' · ✓ CLIENTE AQUÍ' : ''}`}
+              title={`${b.client_name} · ${b.activity} · ${b.time?.slice(0, 5)}–${addMinutesToTime(b.time?.slice(0, 5) ?? '09:00', dur)}${b.arrived ? ' · ✓ CLIENTE AQUÍ' : ''}${b.notes ? '\n📝 ' + b.notes : ''}`}
               onClick={(e) => { e.stopPropagation(); setSelectedRes(b) }}>
-              <span className="truncate">{b.arrived && !b.departed ? '📍 ' : ''}<strong>{color.prefix ? `${color.prefix} ` : ''}{durationShort(dur)}</strong> {b.client_name}</span>
+              <span className="truncate">{b.arrived && !b.departed ? '📍 ' : ''}<strong>{color.prefix ? `${color.prefix} ` : ''}{durationShort(dur)}</strong> {b.client_name}{b.notes ? ' 📝' : ''}</span>
             </div>
           )
         })}
