@@ -86,8 +86,15 @@ export default function SlotModal({
   }
 
   async function unmarkAllDeparted() {
-    const ids = active.map((r) => r.id)
-    await supabase.from('reservations').update({ departed: false, status: 'Confirmada' }).in('id', ids)
+    // Revert Realizada → Confirmada only for those we promoted on mark; other statuses stay.
+    const realizadaIds = active.filter((r) => r.status === 'Realizada').map((r) => r.id)
+    const restIds = active.filter((r) => r.status !== 'Realizada').map((r) => r.id)
+    if (realizadaIds.length > 0) {
+      await supabase.from('reservations').update({ departed: false, status: 'Confirmada' }).in('id', realizadaIds)
+    }
+    if (restIds.length > 0) {
+      await supabase.from('reservations').update({ departed: false }).in('id', restIds)
+    }
     for (const res of active) {
       logAudit({
         reservationId: res.id,
@@ -493,10 +500,11 @@ function EditForm({
       // Split: original row keeps (num_people - affectedCount) unaffected people; new row carries the incident
       const remaining = r.num_people - affectedCount
 
+      // For partial splits, the "staying" portion keeps its original time/date.
+      // Time/date changes only apply to the moved portion (the newRow).
       const originalUpdate: Record<string, unknown> = {
         ...clientFields,
         num_people: remaining,
-        time: time + ':00',
         status,
         // Clear incident fields on the remaining portion
         incident_type: null,

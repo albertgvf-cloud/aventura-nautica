@@ -121,8 +121,8 @@ export default async function DashboardPage({
   }
   const staffList = Array.from(byStaff.entries()).sort((a, b) => b[1].count - a[1].count)
 
-  // Incidents for the day
-  const incidents = active.filter((r) => r.incident_type)
+  // Incidents for the day — include both active and cancelled reservations with an incident
+  const incidents = resForDate.filter((r) => r.incident_type)
   const cancelledToday = resForDate.filter((r) => r.status === 'Cancelada' && r.incident_type)
 
   // Refunds today (incident-based, for the selected date)

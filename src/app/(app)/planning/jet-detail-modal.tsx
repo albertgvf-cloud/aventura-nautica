@@ -220,8 +220,14 @@ function EditForm({
     })
   }
 
-  function findFreeJet(newTime: string, newDur: number): string | null {
-    for (const j of allJets) {
+  function findFreeJet(newTime: string, newDur: number, currentJetId: string | null): string | null {
+    // Only look inside the same fleet category as the current jet so a VX doesn't get moved onto a Con Tit jet.
+    const sameFleet = ALL_SIN_TIT_JETS.some((j) => j.id === currentJetId)
+      ? ALL_SIN_TIT_JETS
+      : ALL_CON_TIT_JETS.some((j) => j.id === currentJetId)
+      ? ALL_CON_TIT_JETS
+      : allJets
+    for (const j of sameFleet) {
       if (!findOverlap(j.id, newTime, newDur)) return j.id
     }
     return null
@@ -233,6 +239,11 @@ function EditForm({
     setError(null)
 
     if (hasIncident && incidentResolution) {
+      if (canSplit && affectedIds.length === 0) {
+        setError('Selecciona al menos una moto afectada por la incidencia.')
+        setSaving(false)
+        return
+      }
       if (!resolvedBy) {
         setError('Indica qué comercial ha gestionado la resolucion.')
         setSaving(false)
@@ -275,7 +286,7 @@ function EditForm({
       const member = groupMembers.find((m) => m.id === id) ?? r
       if (!member.jet_id) continue
       if (findOverlap(member.jet_id, time, duration)) {
-        const freeJet = findFreeJet(time, duration)
+        const freeJet = findFreeJet(time, duration, member.jet_id)
         if (freeJet) reassignments.push({ id, newJetId: freeJet })
         else noAvailability.push(member.jet_id)
       }
