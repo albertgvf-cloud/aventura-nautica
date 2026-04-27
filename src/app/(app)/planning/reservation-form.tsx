@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { logAudit } from '@/lib/audit'
@@ -44,6 +44,11 @@ export default function ReservationForm({
   const [expanded, setExpanded] = useState(false)
 
   const activityConfig = activities.find((a) => a.name === activity)
+
+  const isPastReservation = useMemo(() => {
+    if (!time) return false
+    return new Date(`${date}T${time}:00`).getTime() < Date.now()
+  }, [date, time])
 
   // Check current occupancy when activity or time changes
   useEffect(() => {
@@ -313,6 +318,11 @@ export default function ReservationForm({
         {isBlocked && (
           <div className="mt-2 p-2 bg-red-50 border border-red-300 rounded-lg text-sm text-red-800">
             {warning}
+          </div>
+        )}
+        {isPastReservation && (
+          <div className="mt-2 p-2 bg-amber-50 border border-amber-300 rounded-lg text-sm text-amber-800">
+            Atencion: la fecha/hora seleccionada ya ha pasado.
           </div>
         )}
 
