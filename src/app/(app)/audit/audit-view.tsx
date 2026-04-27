@@ -1,6 +1,7 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
+import { formatDateLong, addDays } from '@/lib/date'
 
 type AuditLog = {
   id: string
@@ -72,10 +73,7 @@ export default function AuditView({
     staffBreakdown[name][log.action] = (staffBreakdown[name][log.action] ?? 0) + 1
   }
 
-  const dateObj = new Date(date + 'T00:00:00')
-  const dayNames = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
-  const monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
-  const dateLabel = `${dayNames[dateObj.getDay()]}, ${dateObj.getDate()} ${monthNames[dateObj.getMonth()]} ${dateObj.getFullYear()}`
+  const dateLabel = formatDateLong(date)
 
   return (
     <div className="flex flex-col h-full">
@@ -87,11 +85,11 @@ export default function AuditView({
             <p className="text-sm text-gray-500">Registro de actividad — Solo administración</p>
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={() => { const d = new Date(date); d.setDate(d.getDate() - 1); changeDate(d.toISOString().slice(0, 10)) }}
+            <button onClick={() => changeDate(addDays(date, -1))}
               className="px-3 py-1.5 border border-gray-300 rounded-lg hover:bg-gray-100 text-gray-700 text-sm">←</button>
             <input type="date" value={date} onChange={(e) => changeDate(e.target.value)}
               className="px-3 py-1.5 border border-gray-300 rounded-lg text-gray-900 text-sm outline-none focus:ring-2 focus:ring-sky-500" />
-            <button onClick={() => { const d = new Date(date); d.setDate(d.getDate() + 1); changeDate(d.toISOString().slice(0, 10)) }}
+            <button onClick={() => changeDate(addDays(date, 1))}
               className="px-3 py-1.5 border border-gray-300 rounded-lg hover:bg-gray-100 text-gray-700 text-sm">→</button>
           </div>
         </div>

@@ -4,7 +4,8 @@ import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { logAudit } from '@/lib/audit'
-import { OFFICES, STATUSES, TIME_SLOTS, INCIDENT_TYPES, INCIDENT_RESOLUTIONS } from '@/lib/config'
+import { OFFICES, STATUSES, TIME_SLOTS, INCIDENT_TYPES, INCIDENT_RESOLUTIONS, INCIDENT_AUTHORIZERS } from '@/lib/config'
+import { getStoredOffice } from '@/lib/office'
 
 type Reservation = {
   id: string
@@ -25,6 +26,8 @@ type Reservation = {
   incident_resolution: string | null
   incident_refund_amount: number | null
   incident_refund_type: string | null
+  incident_resolved_by: string | null
+  incident_authorized_by: string | null
 }
 
 export default function SlotModal({
@@ -83,8 +86,15 @@ export default function SlotModal({
   }
 
   async function unmarkAllDeparted() {
-    const ids = active.map((r) => r.id)
-    await supabase.from('reservations').update({ departed: false, status: 'Confirmada' }).in('id', ids)
+    // Revert Realizada → Confirmada only for those we promoted on mark; other statuses stay.
+    const realizadaIds = active.filter((r) => r.status === 'Realizada').map((r) => r.id)
+    const restIds = active.filter((r) => r.status !== 'Realizada').map((r) => r.id)
+    if (realizadaIds.length > 0) {
+      await supabase.from('reservations').update({ departed: false, status: 'Confirmada' }).in('id', realizadaIds)
+    }
+    if (restIds.length > 0) {
+      await supabase.from('reservations').update({ departed: false }).in('id', restIds)
+    }
     for (const res of active) {
       logAudit({
         reservationId: res.id,
@@ -344,10 +354,15 @@ function ReservationCard({
                     <p className="text-amber-800 text-xs mt-0.5">
                       Solucion: {r.incident_resolution}
                       {r.incident_refund_amount != null && (
-                        <> · {r.incident_refund_amount}€
-                          {r.incident_refund_type ? ` (${r.incident_refund_type})` : ''}
-                        </>
+                        <> · {r.incident_refund_amount}€</>
                       )}
+                    </p>
+                  )}
+                  {(r.incident_resolved_by || r.incident_authorized_by) && (
+                    <p className="text-gray-600 text-xs mt-0.5">
+                      {r.incident_resolved_by && <>Gestionada por {r.incident_resolved_by}</>}
+                      {r.incident_resolved_by && r.incident_authorized_by && ' · '}
+                      {r.incident_authorized_by && <>Autoriza: {r.incident_authorized_by}</>}
                     </p>
                   )}
                   {r.incident_comment && <p className="text-gray-600 text-xs mt-0.5">{r.incident_comment}</p>}
@@ -423,6 +438,8 @@ function EditForm({
   const [refundAmount, setRefundAmount] = useState<string>(
     r.incident_refund_amount != null ? String(r.incident_refund_amount) : ''
   )
+  const [resolvedBy, setResolvedBy] = useState(r.incident_resolved_by ?? '')
+  const [authorizedBy, setAuthorizedBy] = useState(r.incident_authorized_by ?? '')
   const [affected, setAffected] = useState(r.num_people)
   const [newDate, setNewDate] = useState(date)
   const [saving, setSaving] = useState(false)
@@ -446,7 +463,28 @@ function EditForm({
     setSaving(true)
     setError(null)
 
-    const parsedAmount = refundAmount.trim() === '' ? null : Number(refundAmount)
+    // Require resolver + authorizer whenever a resolution is picked
+    if (hasIncident && incidentResolution) {
+      if (!resolvedBy) {
+        setError('Indica qué comercial ha gestionado la resolucion.')
+        setSaving(false)
+        return
+      }
+      if (!authorizedBy) {
+        setError('Indica quién ha autorizado la resolucion (o "Sin autorizacion").')
+        setSaving(false)
+        return
+      }
+    }
+
+    const trimmedAmount = refundAmount.trim()
+    const parsedAmountRaw = trimmedAmount === '' ? null : Number(trimmedAmount)
+    if (parsedAmountRaw != null && Number.isNaN(parsedAmountRaw)) {
+      setError('El importe no es un numero valido.')
+      setSaving(false)
+      return
+    }
+    const parsedAmount = parsedAmountRaw
 
     // Shared client-info fields (apply to all rows we touch)
     const clientFields = {
@@ -462,10 +500,11 @@ function EditForm({
       // Split: original row keeps (num_people - affectedCount) unaffected people; new row carries the incident
       const remaining = r.num_people - affectedCount
 
+      // For partial splits, the "staying" portion keeps its original time/date.
+      // Time/date changes only apply to the moved portion (the newRow).
       const originalUpdate: Record<string, unknown> = {
         ...clientFields,
         num_people: remaining,
-        time: time + ':00',
         status,
         // Clear incident fields on the remaining portion
         incident_type: null,
@@ -473,6 +512,8 @@ function EditForm({
         incident_resolution: null,
         incident_refund_amount: null,
         incident_refund_type: null,
+        incident_resolved_by: null,
+        incident_authorized_by: null,
       }
 
       const newRow: Record<string, unknown> = {
@@ -488,13 +529,31 @@ function EditForm({
         incident_resolution: incidentResolution,
         incident_refund_amount: showAmount ? parsedAmount : null,
         incident_refund_type: null,
+        incident_resolved_by: resolvedBy || null,
+        incident_authorized_by: authorizedBy || null,
       }
 
-      const { error: updErr } = await supabase.from('reservations').update(originalUpdate).eq('id', r.id)
-      if (updErr) { setSaving(false); setError(updErr.message); return }
-
+      // Step 1: insert the new row FIRST so a failure leaves the original untouched
       const { error: insErr } = await supabase.from('reservations').insert(newRow)
       if (insErr) { setSaving(false); setError(insErr.message); return }
+
+      // Step 2: update the original to subtract affected people
+      const { error: updErr } = await supabase.from('reservations').update(originalUpdate).eq('id', r.id)
+      if (updErr) {
+        // Best-effort rollback: delete the just-inserted row by matching its unique fields
+        await supabase
+          .from('reservations')
+          .delete()
+          .match({
+            activity_type: newRow.activity_type,
+            activity: newRow.activity,
+            date: newRow.date,
+            time: newRow.time,
+            client_name: newRow.client_name,
+            num_people: newRow.num_people,
+          })
+        setSaving(false); setError(updErr.message); return
+      }
 
       logAudit({
         reservationId: r.id,
@@ -520,6 +579,8 @@ function EditForm({
       incident_resolution: hasIncident ? (incidentResolution || null) : null,
       incident_refund_amount: showAmount ? parsedAmount : null,
       incident_refund_type: null,
+      incident_resolved_by: hasIncident && incidentResolution ? (resolvedBy || null) : null,
+      incident_authorized_by: hasIncident && incidentResolution ? (authorizedBy || null) : null,
     }
     if (showDateChange && newDate !== date) {
       updateData.date = newDate
@@ -718,35 +779,55 @@ function EditForm({
               </div>
             )}
             {incidentResolution && (
-              <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2">
-                {showDateChange && (
-                  <>
-                    <Field label="Nuevo dia">
-                      <input type="date" value={newDate} onChange={(e) => setNewDate(e.target.value)} className="input" />
+              <>
+                <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  {showDateChange && (
+                    <>
+                      <Field label="Nuevo dia">
+                        <input type="date" value={newDate} onChange={(e) => setNewDate(e.target.value)} className="input" />
+                      </Field>
+                      <Field label="Nueva hora">
+                        <select value={time} onChange={(e) => setTime(e.target.value)} className="input">
+                          {TIME_SLOTS.map((t) => (
+                            <option key={t} value={t}>{t}</option>
+                          ))}
+                        </select>
+                      </Field>
+                    </>
+                  )}
+                  {showAmount && (
+                    <Field label={isVoucher ? 'Importe del vale (€)' : 'Importe a devolver (€)'}>
+                      <input
+                        type="number"
+                        min={0}
+                        step="0.01"
+                        value={refundAmount}
+                        onChange={(e) => setRefundAmount(e.target.value)}
+                        className="input"
+                        placeholder="0.00"
+                      />
                     </Field>
-                    <Field label="Nueva hora">
-                      <select value={time} onChange={(e) => setTime(e.target.value)} className="input">
-                        {TIME_SLOTS.map((t) => (
-                          <option key={t} value={t}>{t}</option>
-                        ))}
-                      </select>
-                    </Field>
-                  </>
-                )}
-                {showAmount && (
-                  <Field label={isVoucher ? 'Importe del vale (€)' : 'Importe a devolver (€)'}>
-                    <input
-                      type="number"
-                      min={0}
-                      step="0.01"
-                      value={refundAmount}
-                      onChange={(e) => setRefundAmount(e.target.value)}
-                      className="input"
-                      placeholder="0.00"
-                    />
+                  )}
+                </div>
+                <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <Field label="Gestionada por * (comercial)">
+                    <select value={resolvedBy} onChange={(e) => setResolvedBy(e.target.value)} className="input" required>
+                      <option value="">-- selecciona --</option>
+                      {staffNames.map((n) => (
+                        <option key={n} value={n}>{n}</option>
+                      ))}
+                    </select>
                   </Field>
-                )}
-              </div>
+                  <Field label="Autorizada por *">
+                    <select value={authorizedBy} onChange={(e) => setAuthorizedBy(e.target.value)} className="input" required>
+                      <option value="">-- selecciona --</option>
+                      {INCIDENT_AUTHORIZERS.map((a) => (
+                        <option key={a} value={a}>{a}</option>
+                      ))}
+                    </select>
+                  </Field>
+                </div>
+              </>
             )}
             {isPartial && (
               <p className="mt-2 text-xs text-sky-700">
@@ -808,7 +889,7 @@ function QuickAddForm({
   const [phone, setPhone] = useState('')
   const [numPeople, setNumPeople] = useState(1)
   const [staff, setStaff] = useState('')
-  const [office, setOffice] = useState('')
+  const [office, setOffice] = useState(() => getStoredOffice())
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 

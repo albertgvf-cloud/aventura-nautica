@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { logAudit } from '@/lib/audit'
 import { JETS, ALL_SIN_TIT_JETS, ALL_CON_TIT_JETS, JETS_SLOTS, OFFICES, durationLabel, timeToMinutes } from '@/lib/config'
+import { getStoredOffice } from '@/lib/office'
 
 type Reservation = {
   time: string
@@ -37,7 +38,7 @@ export default function JetsForm({
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
   const [staff, setStaff] = useState('')
-  const [office, setOffice] = useState('')
+  const [office, setOffice] = useState(() => getStoredOffice())
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
@@ -63,7 +64,7 @@ export default function JetsForm({
     return fleet.filter((j) => !busyIds.has(j.id))
   }
 
-  // Fleet depends on category
+  // Fleet depends on category: licensed drivers can also book a VX
   const fleet = category === 'sin' ? ALL_SIN_TIT_JETS : [...ALL_SIN_TIT_JETS, ...ALL_CON_TIT_JETS]
   const availableJets = useMemo(() => getAvailableJets(time, duration, fleet), [time, duration, category, active])
 
@@ -76,6 +77,16 @@ export default function JetsForm({
     }
     return groups
   }, [availableJets])
+
+  // All models in the fleet (for rendering the picker even before time is selected)
+  const allModels = useMemo(() => {
+    const groups: Record<string, typeof fleet> = {}
+    for (const j of fleet) {
+      if (!groups[j.model]) groups[j.model] = []
+      groups[j.model].push(j)
+    }
+    return groups
+  }, [fleet])
 
   function handleTimeChange(t: string) { setTime(t); setQtyByModel({}) }
   function handleDurationChange(d: number) { setDuration(d); setQtyByModel({}) }
@@ -208,56 +219,73 @@ export default function JetsForm({
         </div>
 
         {/* Step 2: Select number of jets per model */}
-        {time && (
-          <div className="mb-3 p-3 border border-gray-200 rounded-xl bg-gray-50/50">
-            <label className="block text-xs text-gray-500 mb-2">
-              Motos disponibles a las {time} ({durationLabel(duration)}):
-            </label>
-            {Object.keys(availableByModel).length === 0 ? (
-              <p className="text-xs text-red-500 py-1">No hay motos disponibles a esta hora y duración</p>
-            ) : (
-              <div className="space-y-2">
-                {Object.entries(availableByModel).map(([model, jets]) => {
-                  const qty = qtyByModel[model] ?? 0
-                  const isSpecial = ALL_CON_TIT_JETS.some((c) => c.model === model)
-                  const colorClass = isSpecial ? 'text-green-700' : 'text-blue-700'
-                  const bgClass = isSpecial ? 'bg-green-50 border-green-200' : 'bg-blue-50 border-blue-200'
-                  return (
-                    <div key={model} className={`flex items-center gap-3 p-2 rounded-lg border ${qty > 0 ? bgClass : 'bg-white border-gray-200'}`}>
-                      <div className="flex-1 min-w-0">
-                        <span className={`text-sm font-semibold ${colorClass}`}>{model}</span>
-                        <span className="text-xs text-gray-400 ml-1.5">{jets.length} disponibles</span>
-                      </div>
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        <button type="button" onClick={() => setModelQty(model, qty - 1)} disabled={qty <= 0}
-                          className="w-8 h-8 rounded-lg border border-gray-300 flex items-center justify-center text-gray-600 hover:bg-gray-100 disabled:opacity-30 disabled:hover:bg-transparent font-bold">
-                          −
-                        </button>
-                        <span className={`w-8 text-center text-sm font-bold ${qty > 0 ? colorClass : 'text-gray-400'}`}>
-                          {qty}
-                        </span>
-                        <button type="button" onClick={() => setModelQty(model, qty + 1)} disabled={qty >= jets.length}
-                          className="w-8 h-8 rounded-lg border border-gray-300 flex items-center justify-center text-gray-600 hover:bg-gray-100 disabled:opacity-30 disabled:hover:bg-transparent font-bold">
-                          +
-                        </button>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-            {totalSelected > 0 && (
-              <div className="mt-2 flex flex-wrap gap-3 text-xs text-gray-600 pt-2 border-t border-gray-200">
-                <span className="font-semibold text-gray-900">Total: {totalSelected} motos</span>
-                <span>⏱ Retorno: {returnTime}</span>
-                {category === 'sin' && <span>👨‍🏫 Monitores: {instructorsNeeded}</span>}
-                <span className="text-gray-400">
-                  ({getJetsToAssign().map((j) => j.label).join(', ')})
-                </span>
-              </div>
-            )}
+        <div className="mb-3 p-3 border border-gray-200 rounded-xl bg-gray-50/50">
+          <label className="block text-xs text-gray-500 mb-2">
+            {time
+              ? `Motos disponibles a las ${time} (${durationLabel(duration)}):`
+              : `Selecciona una hora para ver disponibilidad (${durationLabel(duration)}):`}
+          </label>
+          <div className="space-y-2">
+            {Object.entries(allModels).map(([model, jets]) => {
+              const qty = qtyByModel[model] ?? 0
+              const availCount = (availableByModel[model] ?? []).length
+              const maxQty = time ? availCount : jets.length
+              const isSpecial = ALL_CON_TIT_JETS.some((c) => c.model === model)
+              const colorClass = isSpecial ? 'text-green-700' : 'text-blue-700'
+              const bgClass = isSpecial ? 'bg-green-50 border-green-200' : 'bg-blue-50 border-blue-200'
+              const noAvail = time !== '' && availCount === 0
+              return (
+                <div
+                  key={model}
+                  className={`flex items-center gap-3 p-2 rounded-lg border ${
+                    qty > 0 ? bgClass : noAvail ? 'bg-gray-100 border-gray-200 opacity-60' : 'bg-white border-gray-200'
+                  }`}
+                >
+                  <div className="flex-1 min-w-0">
+                    <span className={`text-sm font-semibold ${colorClass}`}>{model}</span>
+                    <span className="text-xs text-gray-400 ml-1.5">
+                      {time
+                        ? (availCount > 0 ? `${availCount} disponibles` : 'sin disponibilidad')
+                        : `${jets.length} en flota`}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setModelQty(model, qty - 1)}
+                      disabled={qty <= 0}
+                      className="w-8 h-8 rounded-lg border border-gray-300 flex items-center justify-center text-gray-600 hover:bg-gray-100 disabled:opacity-30 disabled:hover:bg-transparent font-bold"
+                    >
+                      −
+                    </button>
+                    <span className={`w-8 text-center text-sm font-bold ${qty > 0 ? colorClass : 'text-gray-400'}`}>
+                      {qty}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setModelQty(model, qty + 1)}
+                      disabled={!time || qty >= maxQty}
+                      title={!time ? 'Selecciona una hora primero' : undefined}
+                      className="w-8 h-8 rounded-lg border border-gray-300 flex items-center justify-center text-gray-600 hover:bg-gray-100 disabled:opacity-30 disabled:hover:bg-transparent font-bold"
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
           </div>
-        )}
+          {totalSelected > 0 && (
+            <div className="mt-2 flex flex-wrap gap-3 text-xs text-gray-600 pt-2 border-t border-gray-200">
+              <span className="font-semibold text-gray-900">Total: {totalSelected} motos</span>
+              <span>⏱ Retorno: {returnTime}</span>
+              {category === 'sin' && <span>👨‍🏫 Monitores: {instructorsNeeded}</span>}
+              <span className="text-gray-400">
+                ({getJetsToAssign().map((j) => j.label).join(', ')})
+              </span>
+            </div>
+          )}
+        </div>
 
         {/* Step 3: Client info */}
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2">

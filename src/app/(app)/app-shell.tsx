@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import Sidebar from './sidebar'
 import LogoutButton from './logout-button'
+import OfficeSelector from './office-selector'
 
 export default function AppShell({
   role,
@@ -83,6 +84,7 @@ export default function AppShell({
           <div className="hidden lg:block" />
 
           <div className="flex items-center gap-2 sm:gap-4">
+            <OfficeSelector />
             <div className="text-right hidden sm:block">
               <p className="text-sm font-medium text-gray-900 truncate max-w-[200px]">{userName}</p>
               <p className="text-xs text-gray-500 capitalize">{userRole}</p>

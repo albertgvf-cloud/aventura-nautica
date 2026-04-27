@@ -30,6 +30,8 @@ type Reservation = {
   incident_resolution?: string | null
   incident_refund_amount?: number | null
   incident_refund_type?: string | null
+  incident_resolved_by?: string | null
+  incident_authorized_by?: string | null
 }
 
 type GroupedReservation = {
@@ -163,19 +165,6 @@ export default function ReservationList({
     router.refresh()
   }
 
-  async function cancelGroup(ids: string[], group: GroupedReservation) {
-    await supabase.from('reservations').update({ status: 'Cancelada' }).in('id', ids)
-    logAudit({
-      reservationId: ids[0],
-      action: 'cancelled',
-      clientName: group.client_name,
-      activityType: isJets ? 'jets' : undefined,
-      details: `${group.activity} a las ${group.time?.slice(0, 5)}`,
-    })
-    router.refresh()
-  }
-
-
   if (reservations.length === 0) {
     return (
       <div className="p-6 bg-white rounded-xl border border-gray-200 text-center">
@@ -248,12 +237,6 @@ export default function ReservationList({
                     )}
                   </div>
                 </div>
-                <div className="flex gap-2 shrink-0">
-                  {!isCancelled && (
-                    <button onClick={() => cancelGroup(ids, g)}
-                      className="w-9 h-9 flex items-center justify-center text-xs text-red-600 rounded-lg hover:bg-red-50 border border-red-200">✗</button>
-                  )}
-                </div>
               </div>
             </div>
           )
@@ -276,7 +259,6 @@ export default function ReservationList({
               <th className="text-left px-3 py-2 text-xs text-gray-600">Atendido</th>
               <th className="text-left px-3 py-2 text-xs text-gray-600">Oficina</th>
               <th className="text-center px-3 py-2 text-xs text-gray-600">Estado</th>
-              <th className="text-center px-3 py-2 text-xs text-gray-600"></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
@@ -320,13 +302,6 @@ export default function ReservationList({
                   <td className="px-3 py-2 text-gray-600">{g.staff ?? '—'}</td>
                   <td className="px-3 py-2 text-gray-600">{g.office ?? '—'}</td>
                   <td className="px-3 py-2 text-center"><StatusBadge status={g.status} /></td>
-                  <td className="px-3 py-2 text-center">
-                    <div className="flex gap-1 justify-center">
-                      {!isCancelled && (
-                        <button onClick={() => cancelGroup(ids, g)} className="text-xs text-red-600 hover:underline" title="Cancelar">✗</button>
-                      )}
-                    </div>
-                  </td>
                 </tr>
               )
             })}

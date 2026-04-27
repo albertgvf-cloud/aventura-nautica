@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ACTIVITY_TYPES, ACTIVITIES, TIME_SLOTS, PARASAILING_SLOTS } from '@/lib/config'
+import { formatDateLong, formatDateShort, addDays } from '@/lib/date'
 import TimeGrid from './time-grid'
 import ParasailingGrid from './parasailing-grid'
 import JetsGrid from './jets-grid'
@@ -46,6 +47,8 @@ type Reservation = {
   incident_resolution: string | null
   incident_refund_amount: number | null
   incident_refund_type: string | null
+  incident_resolved_by: string | null
+  incident_authorized_by: string | null
 }
 
 export default function PlanningView({
@@ -76,9 +79,7 @@ export default function PlanningView({
   const isJets = activeTab === 'jets'
 
   function changeDate(offset: number) {
-    const d = new Date(date)
-    d.setDate(d.getDate() + offset)
-    router.push(`/planning?date=${d.toISOString().slice(0, 10)}&tab=${activeTab}`)
+    router.push(`/planning?date=${addDays(date, offset)}&tab=${activeTab}`)
     router.refresh()
   }
 
@@ -96,13 +97,9 @@ export default function PlanningView({
     setModal({ slot, activityName, reservationId })
   }
 
-  // Format date nicely
-  const dateObj = new Date(date + 'T00:00:00')
-  const dayNames = ['Domingo', 'Lunes', 'Martes', 'Miercoles', 'Jueves', 'Viernes', 'Sabado']
-  const monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
-  const dateLabel = `${dayNames[dateObj.getDay()]}, ${dateObj.getDate()} ${monthNames[dateObj.getMonth()]} ${dateObj.getFullYear()}`
-  // Short date for mobile
-  const dateLabelShort = `${dayNames[dateObj.getDay()].slice(0, 3)}, ${dateObj.getDate()} ${monthNames[dateObj.getMonth()].slice(0, 3)}`
+  // Format date — DD/MM/YYYY with day name (DD/MM short on mobile)
+  const dateLabel = formatDateLong(date)
+  const dateLabelShort = formatDateShort(date)
 
   // Total people count
   const totalPeople = activeReservations.reduce((sum, r) => sum + r.num_people, 0)
@@ -214,9 +211,9 @@ export default function PlanningView({
       {isJets ? (
         <JetsGrid reservations={allForTab} onSlotClick={handleSlotClick} staffNames={staffNames} date={date} />
       ) : isParasailing ? (
-        <ParasailingGrid reservations={allForTab} onSlotClick={handleSlotClick} />
+        <ParasailingGrid reservations={allForTab} onSlotClick={handleSlotClick} date={date} />
       ) : (
-        <TimeGrid activities={activities} reservations={allForTab} timeSlots={TIME_SLOTS} onSlotClick={handleSlotClick} />
+        <TimeGrid activities={activities} reservations={allForTab} timeSlots={TIME_SLOTS} onSlotClick={handleSlotClick} date={date} />
       )}
 
       {/* Reservation list (detail) */}

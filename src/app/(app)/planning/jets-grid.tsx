@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { JETS, ALL_SIN_TIT_JETS, ALL_CON_TIT_JETS, JETS_SLOTS, durationLabel, durationShort, timeToMinutes, addMinutesToTime } from '@/lib/config'
+import { formatDateLong } from '@/lib/date'
 import JetDetailModal from './jet-detail-modal'
 import JetQuickBook from './jet-quick-book'
 
@@ -74,6 +75,7 @@ export default function JetsGrid({
   const [quickBook, setQuickBook] = useState<{ jetId: string; time: string } | null>(null)
   const [checkTime, setCheckTime] = useState('')
   const [checkDuration, setCheckDuration] = useState(30)
+  const [viewMode, setViewMode] = useState<'timeline' | 'list'>('timeline')
   const active = reservations.filter((r) => r.status !== 'Cancelada')
 
   const startMin = JETS.startHour * 60
@@ -227,35 +229,51 @@ export default function JetsGrid({
   }
 
   // ===== VIRTUAL ROW ASSIGNMENT FOR VX (pool mode) =====
-  // All 16 VX rows shown. Reservations distributed for max efficiency:
-  // - Same time (±15 min): excursions grouped together, circuits grouped together
-  // - Different times: fill gaps in existing rows (reuse jets)
+  // All 16 VX rows shown. Order matches the desired visual grouping:
+  //   1. Reservations within 15 min of each other form a "cluster".
+  //   2. Inside a cluster: excursions before circuits.
+  //   3. Inside a type: longest duration first (1h before 30min).
+  //   4. Inside a duration: by departure time, then client.
+  // Each booking is placed in the topmost row where it fits.
   function buildVirtualRows(): Reservation[][] {
     const totalVX = ALL_SIN_TIT_JETS.length
     const rows: Reservation[][] = Array.from({ length: totalVX }, () => [])
 
     const vxRes = active.filter((r) => ALL_SIN_TIT_JETS.some((j) => j.id === r.jet_id))
 
-    // Sort: by time bucket (15 min), then excursions before circuits,
-    // then by client name (keep same client's jets together), then duration desc
-    const sorted = [...vxRes].sort((a, b) => {
+    // Greedy cluster: reservations are in the same cluster while each one starts
+    // within 15 min of the cluster's first reservation.
+    const byTime = [...vxRes].sort((a, b) => {
       const tA = timeToMinutes(a.time?.slice(0, 5) ?? '09:00')
       const tB = timeToMinutes(b.time?.slice(0, 5) ?? '09:00')
-      const bucketA = Math.floor(tA / 15)
-      const bucketB = Math.floor(tB / 15)
-      if (bucketA !== bucketB) return bucketA - bucketB
-      // Same time bucket: excursions first
+      return tA - tB
+    })
+    const cluster = new Map<string, number>()
+    let clusterIdx = -1
+    let clusterStart = -Infinity
+    for (const r of byTime) {
+      const t = timeToMinutes(r.time?.slice(0, 5) ?? '09:00')
+      if (t - clusterStart > 15) {
+        clusterIdx++
+        clusterStart = t
+      }
+      cluster.set(r.id, clusterIdx)
+    }
+
+    const sorted = [...vxRes].sort((a, b) => {
+      const cA = cluster.get(a.id) ?? 0
+      const cB = cluster.get(b.id) ?? 0
+      if (cA !== cB) return cA - cB
       const isExcA = a.activity.startsWith('Excursion') ? 0 : 1
       const isExcB = b.activity.startsWith('Excursion') ? 0 : 1
       if (isExcA !== isExcB) return isExcA - isExcB
-      // Same type: group by client name
-      const nameComp = a.client_name.localeCompare(b.client_name)
-      if (nameComp !== 0) return nameComp
-      // Same client: longest duration first
       const durA = a.duration_minutes ?? 60
       const durB = b.duration_minutes ?? 60
       if (durA !== durB) return durB - durA
-      return tA - tB
+      const tA = timeToMinutes(a.time?.slice(0, 5) ?? '09:00')
+      const tB = timeToMinutes(b.time?.slice(0, 5) ?? '09:00')
+      if (tA !== tB) return tA - tB
+      return a.client_name.localeCompare(b.client_name)
     })
 
     function fitsInRow(rowIdx: number, rStart: number, rEnd: number): boolean {
@@ -266,86 +284,18 @@ export default function JetsGrid({
       })
     }
 
-    function rowHasSameTypeSameTime(rowIdx: number, isExcursion: boolean, timeBucket: number): boolean {
-      return rows[rowIdx].some((b) => {
-        const bIsExc = b.activity.startsWith('Excursion')
-        const bBucket = Math.floor(timeToMinutes(b.time?.slice(0, 5) ?? '09:00') / 15)
-        return bIsExc === isExcursion && bBucket === timeBucket
-      })
-    }
-
     for (const r of sorted) {
       const rStart = timeToMinutes(r.time?.slice(0, 5) ?? '09:00')
       const rEnd = rStart + (r.duration_minutes ?? 60)
-      const isExcursion = r.activity.startsWith('Excursion')
-      const timeBucket = Math.floor(rStart / 15)
-
-      // Find all rows where this reservation fits
-      const candidates: number[] = []
+      let placed = false
       for (let i = 0; i < totalVX; i++) {
-        if (fitsInRow(i, rStart, rEnd)) candidates.push(i)
-      }
-
-      if (candidates.length === 0) {
-        // Fallback (shouldn't happen with 16 rows)
-        rows[totalVX - 1].push(r)
-        continue
-      }
-
-      // Priority 1: row that has same client at same time (keep Lola's jets together)
-      const sameClient = candidates.find((i) =>
-        rows[i].some((b) => b.client_name === r.client_name && Math.floor(timeToMinutes(b.time?.slice(0, 5) ?? '09:00') / 15) === timeBucket)
-      )
-      if (sameClient !== undefined) {
-        rows[sameClient].push(r)
-        continue
-      }
-
-      // Priority 2: adjacent row to same client (next row after last row with this client)
-      const lastClientRow = (() => {
-        for (let i = totalVX - 1; i >= 0; i--) {
-          if (rows[i].some((b) => b.client_name === r.client_name)) return i
+        if (fitsInRow(i, rStart, rEnd)) {
+          rows[i].push(r)
+          placed = true
+          break
         }
-        return -1
-      })()
-      if (lastClientRow >= 0) {
-        const adjacent = candidates.find((i) => i === lastClientRow + 1)
-        if (adjacent !== undefined) { rows[adjacent].push(r); continue }
       }
-
-      // Priority 3: row that has same-type bookings at the same time (excursions together)
-      const sameTypeTime = candidates.find((i) => rowHasSameTypeSameTime(i, isExcursion, timeBucket))
-      if (sameTypeTime !== undefined) {
-        rows[sameTypeTime].push(r)
-        continue
-      }
-
-      // Priority 4: row that already has bookings (fill gaps for efficiency)
-      // Prefer the row with the most bookings (busiest jet = most efficient)
-      const busyRows = candidates
-        .filter((i) => rows[i].length > 0)
-        .sort((a, b) => rows[b].length - rows[a].length)
-
-      if (busyRows.length > 0) {
-        rows[busyRows[0]].push(r)
-        continue
-      }
-
-      // Priority 5: empty row adjacent to last used row of same type
-      const lastSameTypeRow = (() => {
-        for (let i = totalVX - 1; i >= 0; i--) {
-          if (rows[i].some((b) => b.activity.startsWith('Excursion') === isExcursion)) return i
-        }
-        return -1
-      })()
-
-      if (lastSameTypeRow >= 0) {
-        const nextRow = candidates.find((i) => i === lastSameTypeRow + 1)
-        if (nextRow !== undefined) { rows[nextRow].push(r); continue }
-      }
-
-      // Otherwise first empty candidate
-      rows[candidates[0]].push(r)
+      if (!placed) rows[totalVX - 1].push(r) // overflow fallback
     }
 
     return rows
@@ -373,9 +323,9 @@ export default function JetsGrid({
             <div key={b.id}
               className={`absolute rounded-lg flex items-center justify-center px-2 text-[11px] font-semibold text-white shadow-md cursor-pointer overflow-hidden ${b.arrived && !b.departed ? 'border-2 border-yellow-300 ring-2 ring-yellow-300/50' : 'border border-white/30'} ${b.arrived && !b.departed ? 'bg-yellow-500 hover:bg-yellow-600' : `${color.bg} ${color.hover}`} ${b.departed ? 'opacity-50' : ''}`}
               style={{ left: px(bStart), width: px(bStart + dur) - px(bStart), minWidth: 44, top: 4, bottom: 4 }}
-              title={`${b.client_name} · ${b.activity} · ${b.time?.slice(0, 5)}–${addMinutesToTime(b.time?.slice(0, 5) ?? '09:00', dur)}${b.arrived ? ' · ✓ CLIENTE AQUÍ' : ''}`}
+              title={`${b.client_name} · ${b.activity} · ${b.time?.slice(0, 5)}–${addMinutesToTime(b.time?.slice(0, 5) ?? '09:00', dur)}${b.arrived ? ' · ✓ CLIENTE AQUÍ' : ''}${b.notes ? '\n📝 ' + b.notes : ''}`}
               onClick={(e) => { e.stopPropagation(); setSelectedRes(b) }}>
-              <span className="truncate">{b.arrived && !b.departed ? '📍 ' : ''}<strong>{durationShort(dur)}</strong> {b.client_name}</span>
+              <span className="truncate">{b.arrived && !b.departed ? '📍 ' : ''}<strong>{durationShort(dur)}</strong> {b.client_name}{b.notes ? ' 📝' : ''}</span>
             </div>
           )
         })}
@@ -407,9 +357,9 @@ export default function JetsGrid({
             <div key={b.id}
               className={`absolute rounded-lg flex items-center justify-center px-2 text-[11px] font-semibold text-white shadow-md cursor-pointer overflow-hidden ${b.arrived && !b.departed ? 'border-2 border-yellow-300 ring-2 ring-yellow-300/50' : 'border border-white/30'} ${b.arrived && !b.departed ? 'bg-yellow-500 hover:bg-yellow-600' : `${color.bg} ${color.hover}`} ${b.departed ? 'opacity-50' : ''}`}
               style={{ left: px(bStart), width: px(bStart + dur) - px(bStart), minWidth: 44, top: 4, bottom: 4 }}
-              title={`${b.client_name} · ${b.activity} · ${b.time?.slice(0, 5)}–${addMinutesToTime(b.time?.slice(0, 5) ?? '09:00', dur)}${b.arrived ? ' · ✓ CLIENTE AQUÍ' : ''}`}
+              title={`${b.client_name} · ${b.activity} · ${b.time?.slice(0, 5)}–${addMinutesToTime(b.time?.slice(0, 5) ?? '09:00', dur)}${b.arrived ? ' · ✓ CLIENTE AQUÍ' : ''}${b.notes ? '\n📝 ' + b.notes : ''}`}
               onClick={(e) => { e.stopPropagation(); setSelectedRes(b) }}>
-              <span className="truncate">{b.arrived && !b.departed ? '📍 ' : ''}<strong>{color.prefix ? `${color.prefix} ` : ''}{durationShort(dur)}</strong> {b.client_name}</span>
+              <span className="truncate">{b.arrived && !b.departed ? '📍 ' : ''}<strong>{color.prefix ? `${color.prefix} ` : ''}{durationShort(dur)}</strong> {b.client_name}{b.notes ? ' 📝' : ''}</span>
             </div>
           )
         })}
@@ -424,45 +374,43 @@ export default function JetsGrid({
 
   return (
     <div className="space-y-4">
-      {/* QUICK AVAILABILITY CHECK */}
-      <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-4">
-        <h3 className="font-semibold text-gray-900 text-sm mb-2">🔍 Consulta rápida de disponibilidad VX</h3>
-        <div className="flex flex-wrap items-end gap-3">
-          <div>
-            <label className="block text-xs text-gray-500 mb-0.5">Hora salida</label>
-            <select value={checkTime} onChange={(e) => setCheckTime(e.target.value)}
-              className="px-2 py-1.5 border border-gray-300 rounded-lg text-sm text-gray-900 outline-none focus:ring-2 focus:ring-sky-500">
-              <option value="">— selecciona —</option>
-              {JETS_SLOTS.map((t) => <option key={t} value={t}>{t}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs text-gray-500 mb-0.5">Duración</label>
-            <select value={checkDuration} onChange={(e) => setCheckDuration(Number(e.target.value))}
-              className="px-2 py-1.5 border border-gray-300 rounded-lg text-sm text-gray-900 outline-none focus:ring-2 focus:ring-sky-500">
-              {allDurations.map((d) => <option key={d} value={d}>{durationLabel(d)}</option>)}
-            </select>
-          </div>
-          {quickCheckResult && (
-            <div className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold ${
-              quickCheckResult.free === 0 ? 'bg-red-100 text-red-800' :
-              quickCheckResult.free <= 3 ? 'bg-amber-100 text-amber-800' :
-              'bg-green-100 text-green-800'
-            }`}>
-              <span className="text-lg">{quickCheckResult.free === 0 ? '❌' : quickCheckResult.free <= 3 ? '⚠️' : '✅'}</span>
-              <span>{quickCheckResult.free} VX libres de {quickCheckResult.total}</span>
-              <span className="text-xs font-normal opacity-75">
-                ({checkTime}–{addMinutesToTime(checkTime, checkDuration)})
-              </span>
-            </div>
-          )}
-          {checkTime && (
-            <button type="button" onClick={() => setCheckTime('')}
-              className="text-xs text-gray-400 hover:text-gray-600 underline">Limpiar</button>
-          )}
+      {/* View mode toggle */}
+      <div className="flex items-center justify-between flex-wrap gap-2 no-print">
+        <div className="flex gap-1 bg-gray-100 p-1 rounded-xl">
+          <button
+            type="button"
+            onClick={() => setViewMode('timeline')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+              viewMode === 'timeline' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600'
+            }`}
+          >
+            📊 Timeline
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode('list')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+              viewMode === 'list' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600'
+            }`}
+          >
+            📄 Lista A4
+          </button>
         </div>
+        {viewMode === 'list' && (
+          <button
+            type="button"
+            onClick={() => window.print()}
+            className="px-3 py-1.5 bg-sky-600 hover:bg-sky-700 text-white rounded-lg text-xs font-medium"
+          >
+            🖨️ Imprimir
+          </button>
+        )}
       </div>
 
+      {viewMode === 'list' && <JetsPrintTimeline reservations={active} date={date} virtualVXRows={virtualVXRows} conTitJets={sortedConTit} jetBookingsFor={jetBookings} />}
+
+      {viewMode === 'timeline' && (
+      <>
       {/* GANTT TIMELINE — single wrapper so no space-y-4 gaps between header/axis/body */}
       <div>
         <div className="border border-gray-200 rounded-t-xl">
@@ -585,9 +533,245 @@ export default function JetsGrid({
           <div><p className="text-gray-500 text-xs">Motos libres ahora</p><p className="font-bold text-green-600 text-lg">{ALL_SIN_TIT_JETS.length - busyVX + ALL_CON_TIT_JETS.length - busyConTit}</p></div>
         </div>
       </div>
+      </>
+      )}
 
       {selectedRes && <JetDetailModal reservation={selectedRes} allReservations={reservations} staffNames={staffNames} onClose={() => setSelectedRes(null)} />}
       {quickBook && <JetQuickBook jetId={quickBook.jetId} time={quickBook.time} staffNames={staffNames} date={date} existingReservations={reservations} onClose={() => setQuickBook(null)} />}
+
+      <style jsx global>{`
+        @media print {
+          @page { size: A4 landscape; margin: 8mm; }
+          body * { visibility: hidden !important; }
+          .print-area, .print-area * { visibility: visible !important; }
+          .print-area { position: absolute; left: 0; top: 0; width: 100%; }
+          .no-print { display: none !important; }
+        }
+      `}</style>
+    </div>
+  )
+}
+
+type JetDef = { id: string; model: string; label: string }
+
+function JetsPrintTimeline({
+  reservations,
+  date,
+  virtualVXRows,
+  conTitJets,
+  jetBookingsFor,
+}: {
+  reservations: Reservation[]
+  date: string
+  virtualVXRows: Reservation[][]
+  conTitJets: readonly JetDef[]
+  jetBookingsFor: (jetId: string) => Reservation[]
+}) {
+  const PX_PER_HOUR_PRINT = 80
+  const LABEL_W = 60
+  const ROW_H = 18
+  const startMin = JETS.startHour * 60
+  const endMin = JETS.endHour * 60
+  const totalMin = endMin - startMin
+  const timelineWidth = ((endMin - startMin) / 60) * PX_PER_HOUR_PRINT
+  const totalWidth = LABEL_W + timelineWidth
+  const hours: number[] = []
+  for (let h = JETS.startHour; h <= JETS.endHour; h++) hours.push(h)
+  const px = (m: number) => ((m - startMin) / totalMin) * timelineWidth
+
+  function typeOf(activity: string): 'exc' | 'cir' | 'tit' {
+    if (activity.startsWith('Excursion')) return 'exc'
+    if (activity.startsWith('Circuito')) return 'cir'
+    return 'tit'
+  }
+  function colorsFor(type: 'exc' | 'cir' | 'tit') {
+    if (type === 'exc') return 'bg-orange-500 border-orange-600 text-white'
+    if (type === 'cir') return 'bg-blue-500 border-blue-600 text-white'
+    return 'bg-green-600 border-green-700 text-white'
+  }
+  function shortModel(model: string): string {
+    if (model === 'Jet Blaster') return 'JB'
+    if (model === 'EX100') return 'EX'
+    if (model === 'VXHO') return 'VXHO'
+    if (model === 'FX180') return 'FX'
+    if (model === 'VX115') return 'VX'
+    return model
+  }
+
+  // Only render VX rows that have bookings
+  const usedVXRows = virtualVXRows.map((bookings, i) => ({ bookings, i })).filter(({ bookings }) => bookings.length > 0)
+
+  // Peak instructor count per 15-min slot (VX excursiones + circuitos only, ratio 1 instructor per N jets)
+  const sinTitActive = reservations.filter(
+    (r) => r.activity.startsWith('Excursion') || r.activity.startsWith('Circuito')
+  )
+  const instructorSlots: { startMinute: number; count: number }[] = []
+  for (let m = startMin; m < endMin; m += 15) {
+    let peak = 0
+    for (let mm = m; mm < m + 15; mm += 5) {
+      let jetsActive = 0
+      for (const r of sinTitActive) {
+        const rs = timeToMinutes(r.time?.slice(0, 5) ?? '00:00')
+        const re = rs + (r.duration_minutes ?? 60)
+        if (mm >= rs && mm < re) jetsActive++
+      }
+      const needed = Math.ceil(jetsActive / JETS.sinTitulacion.instructorRatio)
+      if (needed > peak) peak = needed
+    }
+    instructorSlots.push({ startMinute: m, count: peak })
+  }
+
+  const dateLabel = formatDateLong(date)
+  const totalMotos = reservations.length
+
+  function Bar({ r }: { r: Reservation }) {
+    const t = r.time?.slice(0, 5) ?? '09:00'
+    const startM = timeToMinutes(t)
+    const dur = r.duration_minutes ?? 60
+    const left = px(startM)
+    const width = Math.max(20, px(startM + dur) - left - 1)
+    const type = typeOf(r.activity)
+    const jet = [...ALL_SIN_TIT_JETS, ...ALL_CON_TIT_JETS].find((j) => j.id === r.jet_id)
+    const modelLabel = type === 'tit' && jet ? shortModel(jet.model) : ''
+    return (
+      <div
+        className={`absolute top-0.5 bottom-0.5 rounded border ${colorsFor(type)} overflow-hidden flex items-center gap-1 px-1`}
+        style={{ left, width, fontSize: 9, lineHeight: 1.1 }}
+        title={`${r.client_name} · ${t} · ${durationShort(dur)}${modelLabel ? ` · ${modelLabel}` : ''}`}
+      >
+        <span className="font-mono font-bold shrink-0">{t}</span>
+        {modelLabel && (
+          <span className="shrink-0 px-0.5 rounded bg-white/25 font-bold">{modelLabel}</span>
+        )}
+        <span className="truncate font-semibold">{r.client_name}</span>
+        <span className="shrink-0 opacity-80">{durationShort(dur)}</span>
+      </div>
+    )
+  }
+
+  function GridLines() {
+    return (
+      <>
+        {hours.map((h) => (
+          <div key={h} className="absolute top-0 h-full border-l border-gray-300" style={{ left: px(h * 60) }} />
+        ))}
+      </>
+    )
+  }
+
+  return (
+    <div className="print-area bg-white rounded-xl border border-gray-200 p-3">
+      {/* Header with date + legend */}
+      <div className="flex items-end justify-between border-b-2 border-gray-900 pb-2 mb-2">
+        <div>
+          <h2 className="text-base font-bold text-gray-900">Planning Jets</h2>
+          <p className="text-[11px] text-gray-600">{dateLabel}</p>
+        </div>
+        <div className="flex gap-3 text-[10px] text-gray-700 font-medium">
+          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-orange-500" /> Excursión</span>
+          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-blue-500" /> Circuito</span>
+          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-green-600" /> Con tit.</span>
+          <span className="text-gray-500">· {totalMotos} motos</span>
+        </div>
+      </div>
+
+      {/* Time axis */}
+      <div className="relative border border-gray-400 bg-gray-50" style={{ width: totalWidth, height: 18 }}>
+        <div className="absolute top-0 bottom-0 bg-gray-100 border-r border-gray-400" style={{ width: LABEL_W, left: 0 }}>
+          <span className="flex items-center justify-center w-full h-full text-[9px] font-bold text-gray-600">Hora</span>
+        </div>
+        <div className="absolute top-0 bottom-0" style={{ left: LABEL_W, width: timelineWidth }}>
+          {hours.slice(0, -1).map((h) => (
+            <div
+              key={h}
+              className="absolute top-0 h-full border-l border-gray-400"
+              style={{ left: px(h * 60), width: PX_PER_HOUR_PRINT }}
+            >
+              <span className="flex items-center justify-center w-full h-full text-[10px] font-bold text-gray-700">{h}:00</span>
+            </div>
+          ))}
+          <div className="absolute top-0 h-full border-l border-gray-400" style={{ left: px(JETS.endHour * 60) }} />
+        </div>
+      </div>
+
+      {/* VX section */}
+      {usedVXRows.length > 0 && (
+        <div className="border-x border-b border-gray-300">
+          <div className="bg-blue-50 text-[9px] font-bold text-blue-800 px-2 py-0.5 border-b border-blue-200" style={{ width: totalWidth }}>
+            VX115 — Sin titulación ({usedVXRows.length} filas en uso)
+          </div>
+          {usedVXRows.map(({ bookings, i }) => (
+            <div key={`vx-${i}`} className="relative border-b border-gray-200" style={{ width: totalWidth, height: ROW_H }}>
+              <div className="absolute top-0 bottom-0 bg-blue-50/50 border-r border-gray-300 flex items-center justify-center text-[9px] font-bold text-blue-700" style={{ width: LABEL_W, left: 0 }}>
+                VX {i + 1}
+              </div>
+              <div className="absolute top-0 bottom-0" style={{ left: LABEL_W, width: timelineWidth }}>
+                <GridLines />
+                {bookings.map((b) => <Bar key={b.id} r={b} />)}
+              </div>
+            </div>
+          ))}
+          {/* Instructors needed per hour (peak) */}
+          <div className="relative border-t-2 border-blue-300 bg-blue-50/40" style={{ width: totalWidth, height: ROW_H }}>
+            <div className="absolute top-0 bottom-0 bg-blue-100 border-r border-gray-300 flex items-center justify-center text-[9px] font-bold text-blue-800" style={{ width: LABEL_W, left: 0 }}>
+              👨‍🏫 Mon.
+            </div>
+            <div className="absolute top-0 bottom-0" style={{ left: LABEL_W, width: timelineWidth }}>
+              {hours.slice(0, -1).map((h) => (
+                <div key={h} className="absolute top-0 h-full border-l border-gray-300" style={{ left: px(h * 60) }} />
+              ))}
+              {instructorSlots.map(({ startMinute, count }) => {
+                const slotW = PX_PER_HOUR_PRINT / 4
+                const hh = Math.floor(startMinute / 60)
+                const mm = startMinute % 60
+                const timeLabel = `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`
+                return (
+                  <div
+                    key={startMinute}
+                    className={`absolute top-0.5 bottom-0.5 flex items-center justify-center ${
+                      count === 0 ? '' :
+                      count >= 3 ? 'bg-red-300' :
+                      count >= 2 ? 'bg-amber-300' :
+                      'bg-blue-300'
+                    }`}
+                    style={{ left: px(startMinute), width: slotW, color: '#000', fontSize: 11, fontWeight: 900 }}
+                    title={`${count} monitor${count !== 1 ? 'es' : ''} a las ${timeLabel}`}
+                  >
+                    {count || ''}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Con-titulación section */}
+      {conTitJets.length > 0 && (
+        <div className="border-x border-b border-gray-300 mt-1">
+          <div className="bg-green-50 text-[9px] font-bold text-green-800 px-2 py-0.5 border-b border-green-200" style={{ width: totalWidth }}>
+            Con titulación
+          </div>
+          {conTitJets.map((jet) => {
+            const bookings = jetBookingsFor(jet.id)
+            return (
+              <div key={jet.id} className="relative border-b border-gray-200" style={{ width: totalWidth, height: ROW_H }}>
+                <div className="absolute top-0 bottom-0 bg-green-50/50 border-r border-gray-300 flex items-center justify-center text-[9px] font-bold text-green-700" style={{ width: LABEL_W, left: 0 }}>
+                  {jet.label}
+                </div>
+                <div className="absolute top-0 bottom-0" style={{ left: LABEL_W, width: timelineWidth }}>
+                  <GridLines />
+                  {bookings.map((b) => <Bar key={b.id} r={b} />)}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {usedVXRows.length === 0 && conTitJets.every((j) => jetBookingsFor(j.id).length === 0) && (
+        <p className="text-center text-gray-500 py-6 text-sm">Sin reservas este dia.</p>
+      )}
     </div>
   )
 }

@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
+import { toYMD } from '@/lib/date'
 import AuditView from './audit-view'
 
 export default async function AuditPage({
@@ -16,7 +17,7 @@ export default async function AuditPage({
   const { data: me } = await supabase.from('employees').select('role').eq('id', user.id).maybeSingle()
   if (me?.role !== 'admin') redirect('/planning')
 
-  const date = dateParam || new Date().toISOString().slice(0, 10)
+  const date = dateParam || toYMD(new Date())
 
   // Fetch audit logs for the date
   const startOfDay = `${date}T00:00:00`

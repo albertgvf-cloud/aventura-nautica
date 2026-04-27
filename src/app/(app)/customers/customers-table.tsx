@@ -45,7 +45,7 @@ export default function CustomersTable({ customers }: { customers: Customer[] })
               <td className="px-4 py-3 text-sm text-gray-700">{c.phone ?? '—'}</td>
               <td className="px-4 py-3 text-sm text-gray-700">{c.nationality ?? '—'}</td>
               <td className="px-4 py-3 text-sm text-gray-500 text-right">
-                {new Date(c.created_at).toLocaleDateString()}
+                {new Date(c.created_at).toLocaleDateString('es-ES')}
               </td>
             </tr>
           ))}

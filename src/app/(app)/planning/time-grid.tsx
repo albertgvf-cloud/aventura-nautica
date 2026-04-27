@@ -3,6 +3,7 @@
 import { Fragment, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
+import { formatDateLong } from '@/lib/date'
 
 type Activity = { name: string; capacity: number; hardMax: number; color: string }
 type Reservation = {
@@ -14,6 +15,7 @@ type Reservation = {
   status: string
   arrived: boolean
   departed: boolean
+  notes: string | null
 }
 
 export default function TimeGrid({
@@ -21,11 +23,13 @@ export default function TimeGrid({
   reservations,
   timeSlots,
   onSlotClick,
+  date,
 }: {
   activities: Activity[]
   reservations: Reservation[]
   timeSlots: string[]
   onSlotClick: (slot: string, activityName: string, reservationId?: string) => void
+  date: string
 }) {
   const supabase = createClient()
   const router = useRouter()
@@ -34,6 +38,8 @@ export default function TimeGrid({
   const currentMobileActivity = activities[mobileActivityIdx] ?? activities[0]
   // Expanded slot for showing individual client checkboxes
   const [expandedSlot, setExpandedSlot] = useState<{ slot: string; activity: string } | null>(null)
+  // View mode: timeline (grid) or A4 printable list
+  const [viewMode, setViewMode] = useState<'timeline' | 'list'>('timeline')
 
   function getSlotData(slot: string, activityName: string) {
     const slotReservations = reservations.filter(
@@ -96,6 +102,11 @@ export default function TimeGrid({
                 {r.client_name}
               </span>
               <span className="text-xs text-gray-400">{r.num_people} pax</span>
+              {r.notes && (
+                <span title={r.notes} className="text-xs bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded font-bold">
+                  📝
+                </span>
+              )}
             </div>
             <div className="flex gap-1 shrink-0">
               <button
@@ -120,6 +131,45 @@ export default function TimeGrid({
   }
 
   return (
+    <div className="space-y-2">
+      {/* View mode toggle */}
+      <div className="flex items-center justify-between flex-wrap gap-2 no-print">
+        <div className="flex gap-1 bg-gray-100 p-1 rounded-xl">
+          <button
+            type="button"
+            onClick={() => setViewMode('timeline')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+              viewMode === 'timeline' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600'
+            }`}
+          >
+            📊 Parrilla
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode('list')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+              viewMode === 'list' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600'
+            }`}
+          >
+            📄 Lista A4
+          </button>
+        </div>
+        {viewMode === 'list' && (
+          <button
+            type="button"
+            onClick={() => window.print()}
+            className="px-3 py-1.5 bg-sky-600 hover:bg-sky-700 text-white rounded-lg text-xs font-medium"
+          >
+            🖨️ Imprimir
+          </button>
+        )}
+      </div>
+
+      {viewMode === 'list' && (
+        <ActivitiesPrintView activities={activities} reservations={reservations} timeSlots={timeSlots} date={date} />
+      )}
+
+      {viewMode === 'timeline' && (
     <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
       {/* ===== MOBILE VIEW: Activity selector tabs + simplified grid ===== */}
       <div className="md:hidden">
@@ -158,12 +208,13 @@ export default function TimeGrid({
               </thead>
               <tbody>
                 {timeSlots.map((slot, slotIdx) => {
-                  const { people, arrivedPeople, total, arrivedCount, allDeparted } = getSlotData(slot, currentMobileActivity.name)
+                  const { people, arrivedPeople, total, arrivedCount, allDeparted, slotReservations } = getSlotData(slot, currentMobileActivity.name)
                   const available = Math.max(0, currentMobileActivity.capacity - people)
                   const pct = currentMobileActivity.capacity > 0 ? Math.round((people / currentMobileActivity.capacity) * 100) : 0
                   const overCapacity = people > currentMobileActivity.capacity
                   const overHardMax = people > currentMobileActivity.hardMax
                   const hasBookings = people > 0
+                  const hasNotes = slotReservations.some((r) => r.notes && r.notes.trim() !== '')
                   const allArrived = hasBookings && arrivedCount === total
                   const someArrived = hasBookings && arrivedCount > 0 && arrivedCount < total
                   const isExpanded = expandedSlot?.slot === slot && expandedSlot?.activity === currentMobileActivity.name
@@ -189,7 +240,10 @@ export default function TimeGrid({
                           }`}
                           onClick={() => onSlotClick(slot, currentMobileActivity.name)}
                         >
-                          {hasBookings ? people : '+'}
+                          <span className="inline-flex items-center gap-1 justify-center">
+                            {hasBookings ? people : '+'}
+                            {hasNotes && <span className="text-amber-600">📝</span>}
+                          </span>
                         </td>
                         <td className={`px-2 py-2.5 text-center ${cellBg} ${
                           overHardMax ? 'text-red-600 font-bold' :
@@ -291,12 +345,14 @@ export default function TimeGrid({
                   <tr className={`hover:bg-sky-50/30 ${slotIdx % 2 === 0 ? '' : 'bg-gray-50/30'}`}>
                     <td className="px-3 py-2 font-mono text-gray-700 font-medium border-r border-gray-200 sticky left-0 bg-white z-10">{slot}</td>
                     {activities.map((a, i) => {
-                      const { people, arrivedPeople, total, arrivedCount, allDeparted } = getSlotData(slot, a.name)
+                      const { people, arrivedPeople, total, arrivedCount, allDeparted, slotReservations } = getSlotData(slot, a.name)
                       const available = Math.max(0, a.capacity - people)
                       const pct = a.capacity > 0 ? Math.round((people / a.capacity) * 100) : 0
                       const overCapacity = people > a.capacity
                       const overHardMax = people > a.hardMax
                       const hasBookings = people > 0
+                      const hasNotes = slotReservations.some((r) => r.notes && r.notes.trim() !== '')
+                      const slotNotesText = slotReservations.filter((r) => r.notes).map((r) => `${r.client_name}: ${r.notes}`).join('\n')
                       const allArrived = hasBookings && arrivedCount === total
                       const someArrived = hasBookings && arrivedCount > 0 && arrivedCount < total
 
@@ -319,9 +375,12 @@ export default function TimeGrid({
                               hasBookings ? 'text-sky-700' : 'text-gray-400 hover:text-sky-600'
                             }`}
                             onClick={() => onSlotClick(slot, a.name)}
-                            title={hasBookings ? `${arrivedCount}/${total} llegaron — clic para detalle` : 'Clic para añadir reserva'}
+                            title={hasBookings ? `${arrivedCount}/${total} llegaron — clic para detalle${hasNotes ? '\n\nNotas:\n' + slotNotesText : ''}` : 'Clic para añadir reserva'}
                           >
-                            {hasBookings ? people : '+'}
+                            <span className="inline-flex items-center gap-1 justify-center">
+                              {hasBookings ? people : '+'}
+                              {hasNotes && <span className="text-amber-600" title={slotNotesText}>📝</span>}
+                            </span>
                           </td>
                           {/* Available */}
                           <td className={`px-2 py-2 text-center ${cellBg} ${
@@ -391,6 +450,118 @@ export default function TimeGrid({
           </tbody>
         </table>
       </div>
+    </div>
+      )}
+
+      <style jsx global>{`
+        @media print {
+          @page { size: A4 landscape; margin: 8mm; }
+          body * { visibility: hidden !important; }
+          .print-area, .print-area * { visibility: visible !important; }
+          .print-area { position: absolute; left: 0; top: 0; width: 100%; }
+          .no-print { display: none !important; }
+        }
+      `}</style>
+    </div>
+  )
+}
+
+function ActivitiesPrintView({
+  activities,
+  reservations,
+  timeSlots,
+  date,
+}: {
+  activities: Activity[]
+  reservations: Reservation[]
+  timeSlots: string[]
+  date: string
+}) {
+  const dateLabel = formatDateLong(date)
+  const active = reservations.filter((r) => r.status !== 'Cancelada')
+  const totalRes = active.length
+  const totalPeople = active.reduce((s, r) => s + r.num_people, 0)
+
+  function slotRes(slot: string, activityName: string) {
+    return active.filter((r) => r.time === slot + ':00' && r.activity === activityName)
+  }
+
+  // Keep only slots where at least one activity has a booking
+  const usedSlots = timeSlots.filter((slot) =>
+    activities.some((a) => slotRes(slot, a.name).length > 0)
+  )
+
+  return (
+    <div className="print-area bg-white rounded-xl border border-gray-200 p-3 text-[11px]">
+      <div className="flex items-end justify-between border-b-2 border-gray-900 pb-2 mb-2">
+        <div>
+          <h2 className="text-base font-bold text-gray-900">Planning Actividades</h2>
+          <p className="text-[11px] text-gray-600">{dateLabel}</p>
+        </div>
+        <div className="flex gap-3 text-[10px] text-gray-700 font-medium">
+          {activities.map((a) => (
+            <span key={a.name} className="flex items-center gap-1">
+              <span className="w-2.5 h-2.5 rounded" style={{ backgroundColor: a.color }} /> {a.name}
+            </span>
+          ))}
+          <span className="text-gray-500">· {totalRes} reservas · {totalPeople} pers.</span>
+        </div>
+      </div>
+
+      {usedSlots.length === 0 ? (
+        <p className="text-center text-gray-500 py-6 text-sm">Sin reservas este dia.</p>
+      ) : (
+        <table className="w-full border-collapse" style={{ tableLayout: 'fixed' }}>
+          <thead>
+            <tr className="border-b-2 border-gray-800 bg-gray-50 text-left">
+              <th className="px-1.5 py-1 font-bold text-[11px]" style={{ width: 60 }}>Hora</th>
+              {activities.map((a) => (
+                <th key={a.name} className="px-1.5 py-1 font-bold text-[11px]" style={{ color: a.color }}>
+                  {a.name} <span className="text-gray-400 font-normal">({a.capacity})</span>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {usedSlots.map((slot) => (
+              <tr key={slot} className="border-b border-gray-200 align-top">
+                <td className="px-1.5 py-1 font-mono font-bold border-r border-gray-300">{slot}</td>
+                {activities.map((a) => {
+                  const rs = slotRes(slot, a.name)
+                  const people = rs.reduce((s, r) => s + r.num_people, 0)
+                  const over = people > a.capacity
+                  return (
+                    <td key={a.name} className="px-1.5 py-1 border-r border-gray-200">
+                      {rs.length > 0 && (
+                        <div>
+                          <div className="flex items-center gap-1 mb-0.5">
+                            <span
+                              className="px-1 rounded text-white font-bold text-[10px]"
+                              style={{ backgroundColor: a.color }}
+                            >
+                              {people}/{a.capacity}
+                              {over && ' ⚠'}
+                            </span>
+                          </div>
+                          <div className="text-[10px] text-gray-800 leading-tight">
+                            {rs.map((r, i) => (
+                              <div key={r.id}>
+                                {i > 0 && <span className="text-gray-400">· </span>}
+                                <span className="font-semibold">{r.client_name}</span>
+                                <span className="text-gray-500"> ({r.num_people})</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </td>
+                  )
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
     </div>
   )
 }

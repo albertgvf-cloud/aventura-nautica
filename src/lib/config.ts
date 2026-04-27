@@ -8,6 +8,8 @@ export const INCIDENT_TYPES = ['Mal tiempo', 'Problema tecnico AN', 'Problema de
 
 export const INCIDENT_RESOLUTIONS = ['Cambio de dia', 'Cancelar + generar vale', 'Cancelar + devolucion'] as const
 
+export const INCIDENT_AUTHORIZERS = ['Sandra', 'Sindy', 'David', 'Sin autorizacion'] as const
+
 export const ACTIVITY_TYPES = [
   { id: 'nautic', label: 'Actividades', emoji: '🚤' },
   { id: 'parasailing', label: 'Parasailing', emoji: '🪂' },
