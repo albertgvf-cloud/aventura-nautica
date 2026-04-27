@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { redirect } from 'next/navigation'
 import { ACTIVITIES, PARASAILING, JETS } from '@/lib/config'
 import { formatDateLong, addDays, toYMD } from '@/lib/date'
 import Link from 'next/link'
@@ -51,6 +52,12 @@ export default async function DashboardPage({
   const dayEnd = `${selectedDate}T23:59:59.999`
 
   const supabase = await createClient()
+
+  // Check admin
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+  const { data: me } = await supabase.from('employees').select('role').eq('id', user.id).maybeSingle()
+  if (me?.role !== 'admin') redirect('/planning')
 
   const [resForDateRes, resEnteredRes, auditRes] = await Promise.all([
     supabase.from('reservations').select('*').eq('date', selectedDate),
