@@ -17,8 +17,9 @@ export const ACTIVITY_TYPES = [
   { id: 'fliteboard', label: 'Fliteboard', emoji: '🌊' },
 ] as const
 
-// Activities per type, with capacity and hard max per slot
-export const ACTIVITIES: Record<string, { name: string; capacity: number; hardMax: number; color: string }[]> = {
+// Activities per type, with capacity and hard max per slot.
+// `softLimit: true` means hardMax is a visual warning only (red bg), it does NOT block saves.
+export const ACTIVITIES: Record<string, { name: string; capacity: number; hardMax: number; color: string; softLimit?: boolean }[]> = {
   nautic: [
     { name: 'MONSTER', capacity: 10, hardMax: 11, color: '#ef4444' },
     { name: 'CRAZY', capacity: 6, hardMax: 7, color: '#f97316' },
@@ -32,8 +33,8 @@ export const ACTIVITIES: Record<string, { name: string; capacity: number; hardMa
     { name: 'Jet grupo', capacity: 5, hardMax: 5, color: '#06b6d4' },
   ],
   fliteboard: [
-    { name: 'Tabla iniciacion', capacity: 1, hardMax: 1, color: '#14b8a6' },
-    { name: 'Tabla intermedio', capacity: 1, hardMax: 1, color: '#0891b2' },
+    { name: 'Tabla iniciacion', capacity: 3, hardMax: 3, color: '#14b8a6', softLimit: true },
+    { name: 'Tabla intermedio', capacity: 3, hardMax: 3, color: '#0891b2', softLimit: true },
   ],
 }
 
