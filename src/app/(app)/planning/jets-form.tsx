@@ -45,6 +45,11 @@ export default function JetsForm({
 
   const active = reservations.filter((r) => r.status !== 'Cancelada')
 
+  const isPastReservation = useMemo(() => {
+    if (!time) return false
+    return new Date(`${date}T${time}:00`).getTime() < Date.now()
+  }, [date, time])
+
   const durations = category === 'sin'
     ? (type === 'excursion' ? JETS.sinTitulacion.durations.excursion : JETS.sinTitulacion.durations.circuit)
     : JETS.conTitulacion.durations
@@ -322,6 +327,11 @@ export default function JetsForm({
           </div>
         </div>
 
+        {isPastReservation && (
+          <div className="mt-2 p-2 bg-amber-50 border border-amber-300 rounded-lg text-sm text-amber-800">
+            Atencion: la fecha/hora seleccionada ya ha pasado.
+          </div>
+        )}
         {error && <p className="text-sm text-red-600 mt-2">{error}</p>}
 
         <div className="mt-3 flex items-center gap-3">

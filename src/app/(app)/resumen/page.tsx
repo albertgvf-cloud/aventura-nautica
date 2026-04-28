@@ -56,6 +56,10 @@ export default async function ResumenPage({
     .filter((r) => r.activity_type === 'parasailing')
     .sort((a, b) => a.time.localeCompare(b.time))
 
+  const fliteboardRes = reservations
+    .filter((r) => r.activity_type === 'fliteboard')
+    .sort((a, b) => a.time.localeCompare(b.time))
+
   // Group jets by group_id (or singleton) and split by category (sin/con tit)
   const jetsRes = reservations.filter((r) => r.activity_type === 'jets')
   const seen = new Set<string>()
@@ -140,6 +144,16 @@ export default async function ResumenPage({
   } else {
     for (const r of parasailingRes) {
       lines.push(`• ${r.time.slice(0, 5)} vuelo x${r.num_people} - ${r.client_name}`)
+    }
+  }
+  lines.push('')
+
+  lines.push('FLITEBOARD 🌊:')
+  if (fliteboardRes.length === 0) {
+    lines.push('• sin reservas')
+  } else {
+    for (const r of fliteboardRes) {
+      lines.push(`• ${r.time.slice(0, 5)} ${r.activity} x${r.num_people} - ${r.client_name}`)
     }
   }
 

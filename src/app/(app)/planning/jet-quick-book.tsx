@@ -52,6 +52,8 @@ export default function JetQuickBook({
 
   const active = existingReservations.filter((r) => r.status !== 'Cancelada')
 
+  const isPastReservation = time ? new Date(`${date}T${time}:00`).getTime() < Date.now() : false
+
   // Available jets for the selected time + duration
   const availableJets = useMemo(() => {
     const fleet = type === 'con_tit' ? allJetsFleet : ALL_SIN_TIT_JETS
@@ -248,6 +250,11 @@ export default function JetQuickBook({
             </div>
           </div>
 
+          {isPastReservation && (
+            <div className="p-2 bg-amber-50 border border-amber-300 rounded-lg text-sm text-amber-800">
+              Atencion: la fecha/hora seleccionada ya ha pasado.
+            </div>
+          )}
           {error && <p className="text-sm text-red-600">{error}</p>}
 
           <div className="flex gap-2 pt-1">

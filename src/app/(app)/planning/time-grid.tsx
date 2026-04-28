@@ -22,13 +22,15 @@ export default function TimeGrid({
   activities,
   reservations,
   timeSlots,
+  recommendedSlots,
   onSlotClick,
   date,
 }: {
   activities: Activity[]
   reservations: Reservation[]
   timeSlots: string[]
-  onSlotClick: (slot: string, activityName: string, reservationId?: string) => void
+  recommendedSlots?: string[]
+  onSlotClick: (slot: string, activityName: string, reservationId?: string, openInAddMode?: boolean) => void
   date: string
 }) {
   const supabase = createClient()
@@ -221,14 +223,20 @@ export default function TimeGrid({
 
                   const cellBg = overHardMax ? 'bg-red-50' :
                     overCapacity ? 'bg-amber-50' :
-                    allDeparted ? 'bg-blue-50/50' :
-                    allArrived ? 'bg-green-50/50' : ''
+                    allDeparted ? 'bg-blue-200' :
+                    allArrived ? 'bg-green-200' :
+                    hasBookings ? 'bg-sky-200' : ''
 
                   return (
                     <Fragment key={slot}>
                       <tr className={`${slotIdx % 2 === 0 ? '' : 'bg-gray-50/30'}`}>
                         <td className="px-3 py-2.5 font-mono text-gray-700 font-medium border-r border-gray-200 sticky left-0 bg-white z-10 min-h-[44px]">
-                          {slot}
+                          <span className="inline-flex items-center gap-1">
+                            {slot}
+                            {recommendedSlots?.includes(slot) && (
+                              <span className="text-amber-500" title="Hora recomendada">⭐</span>
+                            )}
+                          </span>
                         </td>
                         <td
                           className={`px-2 py-2.5 text-center font-semibold min-h-[44px] cursor-pointer active:bg-sky-100 ${cellBg} ${
@@ -238,23 +246,36 @@ export default function TimeGrid({
                             allArrived ? 'text-green-700' :
                             hasBookings ? 'text-sky-700' : 'text-gray-400'
                           }`}
-                          onClick={() => onSlotClick(slot, currentMobileActivity.name)}
+                          onClick={() => onSlotClick(slot, currentMobileActivity.name, undefined, true)}
+                          title="Clic para añadir nueva reserva"
                         >
                           <span className="inline-flex items-center gap-1 justify-center">
                             {hasBookings ? people : '+'}
                             {hasNotes && <span className="text-amber-600">📝</span>}
                           </span>
                         </td>
-                        <td className={`px-2 py-2.5 text-center ${cellBg} ${
-                          overHardMax ? 'text-red-600 font-bold' :
-                          available === 0 ? 'text-red-600 font-bold' : 'text-green-600'
-                        }`}>
+                        <td
+                          className={`px-2 py-2.5 text-center ${cellBg} ${
+                            overHardMax ? 'text-red-600 font-bold' :
+                            available === 0 ? 'text-red-600 font-bold' : 'text-green-600'
+                          } ${hasBookings ? 'cursor-pointer active:bg-sky-100' : ''}`}
+                          onClick={hasBookings ? () => onSlotClick(slot, currentMobileActivity.name) : undefined}
+                          title={hasBookings ? 'Clic para ver listado de reservas' : undefined}
+                        >
                           {available}
                         </td>
-                        <td className={`px-2 py-2.5 text-center ${cellBg}`}>
+                        <td
+                          className={`px-2 py-2.5 text-center ${cellBg} ${hasBookings ? 'cursor-pointer active:bg-sky-100' : ''}`}
+                          onClick={hasBookings ? () => onSlotClick(slot, currentMobileActivity.name) : undefined}
+                          title={hasBookings ? 'Clic para ver listado de reservas' : undefined}
+                        >
                           <OccupancyBar pct={pct} color={currentMobileActivity.color} overCapacity={overCapacity} overHardMax={overHardMax} />
                         </td>
-                        <td className={`px-1 py-2.5 text-center ${cellBg}`}>
+                        <td
+                          className={`px-1 py-2.5 text-center ${cellBg} ${hasBookings ? 'cursor-pointer active:bg-sky-100' : ''}`}
+                          onClick={hasBookings ? () => onSlotClick(slot, currentMobileActivity.name) : undefined}
+                          title={hasBookings ? 'Clic para ver listado de reservas' : undefined}
+                        >
                           {hasBookings && (
                             <div className="flex flex-col items-center gap-0.5">
                               <button
@@ -343,7 +364,14 @@ export default function TimeGrid({
               return (
                 <Fragment key={slot}>
                   <tr className={`hover:bg-sky-50/30 ${slotIdx % 2 === 0 ? '' : 'bg-gray-50/30'}`}>
-                    <td className="px-3 py-2 font-mono text-gray-700 font-medium border-r border-gray-200 sticky left-0 bg-white z-10">{slot}</td>
+                    <td className="px-3 py-2 font-mono text-gray-700 font-medium border-r border-gray-200 sticky left-0 bg-white z-10">
+                      <span className="inline-flex items-center gap-1">
+                        {slot}
+                        {recommendedSlots?.includes(slot) && (
+                          <span className="text-amber-500" title="Hora recomendada">⭐</span>
+                        )}
+                      </span>
+                    </td>
                     {activities.map((a, i) => {
                       const { people, arrivedPeople, total, arrivedCount, allDeparted, slotReservations } = getSlotData(slot, a.name)
                       const available = Math.max(0, a.capacity - people)
@@ -359,7 +387,8 @@ export default function TimeGrid({
                       const cellBg = overHardMax ? 'bg-red-50' :
                         overCapacity ? 'bg-amber-50' :
                         allDeparted ? 'bg-blue-50/50' :
-                        allArrived ? 'bg-green-50/50' : ''
+                        allArrived ? 'bg-green-50/50' :
+                        hasBookings ? 'bg-sky-200' : ''
 
                       return (
                         <Fragment key={a.name}>
@@ -374,8 +403,8 @@ export default function TimeGrid({
                               allArrived ? 'text-green-700' :
                               hasBookings ? 'text-sky-700' : 'text-gray-400 hover:text-sky-600'
                             }`}
-                            onClick={() => onSlotClick(slot, a.name)}
-                            title={hasBookings ? `${arrivedCount}/${total} llegaron — clic para detalle${hasNotes ? '\n\nNotas:\n' + slotNotesText : ''}` : 'Clic para añadir reserva'}
+                            onClick={() => onSlotClick(slot, a.name, undefined, true)}
+                            title="Clic para añadir nueva reserva"
                           >
                             <span className="inline-flex items-center gap-1 justify-center">
                               {hasBookings ? people : '+'}
@@ -383,18 +412,30 @@ export default function TimeGrid({
                             </span>
                           </td>
                           {/* Available */}
-                          <td className={`px-2 py-2 text-center ${cellBg} ${
-                            overHardMax ? 'text-red-600 font-bold' :
-                            available === 0 ? 'text-red-600 font-bold' : 'text-green-600'
-                          }`}>
+                          <td
+                            className={`px-2 py-2 text-center ${cellBg} ${
+                              overHardMax ? 'text-red-600 font-bold' :
+                              available === 0 ? 'text-red-600 font-bold' : 'text-green-600'
+                            } ${hasBookings ? 'cursor-pointer hover:bg-sky-100 transition-colors' : ''}`}
+                            onClick={hasBookings ? () => onSlotClick(slot, a.name) : undefined}
+                            title={hasBookings ? `${arrivedCount}/${total} llegaron — clic para listado${hasNotes ? '\n\nNotas:\n' + slotNotesText : ''}` : undefined}
+                          >
                             {available}
                           </td>
                           {/* Occupancy bar */}
-                          <td className={`px-2 py-2 text-center ${cellBg}`}>
+                          <td
+                            className={`px-2 py-2 text-center ${cellBg} ${hasBookings ? 'cursor-pointer hover:bg-sky-100 transition-colors' : ''}`}
+                            onClick={hasBookings ? () => onSlotClick(slot, a.name) : undefined}
+                            title={hasBookings ? `Clic para listado${hasNotes ? '\n\nNotas:\n' + slotNotesText : ''}` : undefined}
+                          >
                             <OccupancyBar pct={pct} color={a.color} overCapacity={overCapacity} overHardMax={overHardMax} />
                           </td>
                           {/* Status */}
-                          <td className={`px-1 py-2 text-center ${cellBg}`}>
+                          <td
+                            className={`px-1 py-2 text-center ${cellBg} ${hasBookings ? 'cursor-pointer hover:bg-sky-100 transition-colors' : ''}`}
+                            onClick={hasBookings ? () => onSlotClick(slot, a.name) : undefined}
+                            title={hasBookings ? 'Clic para listado de reservas' : undefined}
+                          >
                             {hasBookings && (
                               <div className="flex flex-col items-center gap-0.5">
                                 <button

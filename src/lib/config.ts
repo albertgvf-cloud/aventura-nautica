@@ -14,6 +14,7 @@ export const ACTIVITY_TYPES = [
   { id: 'nautic', label: 'Actividades', emoji: '🚤' },
   { id: 'parasailing', label: 'Parasailing', emoji: '🪂' },
   { id: 'jets', label: 'Jets', emoji: '🏄' },
+  { id: 'fliteboard', label: 'Fliteboard', emoji: '🌊' },
 ] as const
 
 // Activities per type, with capacity and hard max per slot
@@ -29,6 +30,10 @@ export const ACTIVITIES: Record<string, { name: string; capacity: number; hardMa
   jets: [
     { name: 'Jet individual', capacity: 22, hardMax: 22, color: '#3b82f6' },
     { name: 'Jet grupo', capacity: 5, hardMax: 5, color: '#06b6d4' },
+  ],
+  fliteboard: [
+    { name: 'Tabla iniciacion', capacity: 1, hardMax: 1, color: '#14b8a6' },
+    { name: 'Tabla intermedio', capacity: 1, hardMax: 1, color: '#0891b2' },
   ],
 }
 
@@ -147,6 +152,26 @@ export function timeToMinutes(time: string): number {
   const [h, m] = time.split(':').map(Number)
   return h * 60 + m
 }
+
+// ===== FLITEBOARD CONFIG =====
+// Slots from 08:30 to 20:00 every 30 min (08:30 included because it's a recommended slot)
+export function generateFliteboardSlots(): string[] {
+  const slots = ['08:30']
+  for (let h = 9; h <= 20; h++) {
+    for (let m = 0; m < 60; m += 30) {
+      if (h === 20 && m > 0) continue
+      slots.push(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`)
+    }
+  }
+  return slots
+}
+export const FLITEBOARD_SLOTS = generateFliteboardSlots()
+
+// Recommended slots — visually highlighted with a star in the time-grid
+export const FLITEBOARD_RECOMMENDED_SLOTS = [
+  '08:30', '09:00', '09:30', '10:00', '10:30', '11:00',
+  '18:00', '18:30', '19:00',
+]
 
 // Time slots from 9:30 to 20:00 (every 30 min) — for nautic and other activities
 export function generateTimeSlots(): string[] {

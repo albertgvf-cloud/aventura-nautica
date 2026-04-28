@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { ACTIVITY_TYPES, ACTIVITIES, TIME_SLOTS, PARASAILING_SLOTS } from '@/lib/config'
+import { ACTIVITY_TYPES, ACTIVITIES, TIME_SLOTS, PARASAILING_SLOTS, FLITEBOARD_SLOTS, FLITEBOARD_RECOMMENDED_SLOTS } from '@/lib/config'
 import { formatDateLong, formatDateShort, addDays } from '@/lib/date'
 import TimeGrid from './time-grid'
 import ParasailingGrid from './parasailing-grid'
@@ -68,7 +68,7 @@ export default function PlanningView({
 }) {
   const router = useRouter()
   const [activeTab, setActiveTab] = useState(tab)
-  const [modal, setModal] = useState<{ slot: string; activityName: string; reservationId?: string } | null>(null)
+  const [modal, setModal] = useState<{ slot: string; activityName: string; reservationId?: string; openInAddMode?: boolean } | null>(null)
 
   const activeReservations = reservations.filter(
     (r) => r.activity_type === activeTab && r.status !== 'Cancelada'
@@ -77,6 +77,9 @@ export default function PlanningView({
   const activities = ACTIVITIES[activeTab] ?? []
   const isParasailing = activeTab === 'parasailing'
   const isJets = activeTab === 'jets'
+  const isFliteboard = activeTab === 'fliteboard'
+
+  const tabTimeSlots = isParasailing ? PARASAILING_SLOTS : isFliteboard ? FLITEBOARD_SLOTS : TIME_SLOTS
 
   function changeDate(offset: number) {
     router.push(`/planning?date=${addDays(date, offset)}&tab=${activeTab}`)
@@ -93,8 +96,8 @@ export default function PlanningView({
     router.push(`/planning?date=${date}&tab=${tabId}`, { scroll: false })
   }
 
-  function handleSlotClick(slot: string, activityName: string, reservationId?: string) {
-    setModal({ slot, activityName, reservationId })
+  function handleSlotClick(slot: string, activityName: string, reservationId?: string, openInAddMode?: boolean) {
+    setModal({ slot, activityName, reservationId, openInAddMode })
   }
 
   // Format date — DD/MM/YYYY with day name (DD/MM short on mobile)
@@ -203,7 +206,7 @@ export default function PlanningView({
           activityType={activeTab}
           activities={activities}
           staffNames={staffNames}
-          timeSlots={isParasailing ? PARASAILING_SLOTS : TIME_SLOTS}
+          timeSlots={tabTimeSlots}
         />
       )}
 
@@ -213,11 +216,18 @@ export default function PlanningView({
       ) : isParasailing ? (
         <ParasailingGrid reservations={allForTab} onSlotClick={handleSlotClick} date={date} />
       ) : (
-        <TimeGrid activities={activities} reservations={allForTab} timeSlots={TIME_SLOTS} onSlotClick={handleSlotClick} date={date} />
+        <TimeGrid
+          activities={activities}
+          reservations={allForTab}
+          timeSlots={tabTimeSlots}
+          recommendedSlots={isFliteboard ? FLITEBOARD_RECOMMENDED_SLOTS : undefined}
+          onSlotClick={handleSlotClick}
+          date={date}
+        />
       )}
 
       {/* Reservation list (detail) */}
-      <ReservationList reservations={allForTab} date={date} activeTab={activeTab} />
+      <ReservationList reservations={allForTab} date={date} activeTab={activeTab} staffNames={staffNames} />
 
       {/* Slot detail modal */}
       {modal && modalActivity && (
@@ -231,6 +241,7 @@ export default function PlanningView({
           reservations={modalReservations}
           staffNames={staffNames}
           initialEditingId={modal.reservationId}
+          initialAddMode={modal.openInAddMode}
           onClose={() => setModal(null)}
         />
       )}
