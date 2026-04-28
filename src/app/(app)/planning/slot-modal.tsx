@@ -40,6 +40,7 @@ export default function SlotModal({
   reservations,
   staffNames,
   initialEditingId,
+  initialAddMode,
   onClose,
 }: {
   slot: string
@@ -51,12 +52,13 @@ export default function SlotModal({
   reservations: Reservation[]
   staffNames: string[]
   initialEditingId?: string
+  initialAddMode?: boolean
   onClose: () => void
 }) {
   const router = useRouter()
   const supabase = createClient()
   const [editingId, setEditingId] = useState<string | null>(initialEditingId ?? null)
-  const [showAddForm, setShowAddForm] = useState(false)
+  const [showAddForm, setShowAddForm] = useState(initialAddMode ?? false)
 
   const active = reservations.filter((r) => r.status !== 'Cancelada')
   const totalPeople = active.reduce((s, r) => s + r.num_people, 0)
@@ -893,6 +895,8 @@ function QuickAddForm({
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  const isPastReservation = time ? new Date(`${date}T${time}:00`).getTime() < Date.now() : false
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!clientName.trim()) return setError('Nombre es obligatorio.')
@@ -972,6 +976,11 @@ function QuickAddForm({
             </select>
           </div>
         </div>
+        {isPastReservation && (
+          <div className="mt-2 p-2 bg-amber-50 border border-amber-300 rounded-lg text-sm text-amber-800">
+            Atencion: la fecha/hora seleccionada ya ha pasado.
+          </div>
+        )}
         {error && <p className="text-sm text-red-600 mt-2">{error}</p>}
         <div className="mt-3 flex gap-2">
           <button type="submit" disabled={saving}

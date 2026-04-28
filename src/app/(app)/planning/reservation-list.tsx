@@ -55,14 +55,20 @@ export default function ReservationList({
   reservations,
   date,
   activeTab,
+  staffNames,
 }: {
   reservations: Reservation[]
   date: string
   activeTab?: string
+  staffNames: string[]
 }) {
   const router = useRouter()
   const supabase = createClient()
   const [search, setSearch] = useState('')
+  const [cancelling, setCancelling] = useState<GroupedReservation | null>(null)
+  const [cancelledBy, setCancelledBy] = useState('')
+  const [cancelError, setCancelError] = useState<string | null>(null)
+  const [cancelSaving, setCancelSaving] = useState(false)
 
   const isJets = activeTab === 'jets'
 
@@ -165,6 +171,42 @@ export default function ReservationList({
     router.refresh()
   }
 
+  function openCancel(group: GroupedReservation) {
+    setCancelling(group)
+    setCancelledBy('')
+    setCancelError(null)
+  }
+
+  async function confirmCancel() {
+    if (!cancelling) return
+    if (!cancelledBy) {
+      setCancelError('Indica quien cancela.')
+      return
+    }
+    setCancelSaving(true)
+    const ids = cancelling.reservations.map((r) => r.id)
+    const { error } = await supabase
+      .from('reservations')
+      .update({ status: 'Cancelada' })
+      .in('id', ids)
+    if (error) {
+      setCancelError(error.message)
+      setCancelSaving(false)
+      return
+    }
+    logAudit({
+      reservationId: ids[0],
+      action: 'cancelled',
+      clientName: cancelling.client_name,
+      activityType: cancelling.reservations[0]?.activity_type,
+      performedBy: cancelledBy,
+      details: 'Cancelada desde Detalle de reservas (sin incidencia)',
+    })
+    setCancelSaving(false)
+    setCancelling(null)
+    router.refresh()
+  }
+
   if (reservations.length === 0) {
     return (
       <div className="p-6 bg-white rounded-xl border border-gray-200 text-center">
@@ -200,7 +242,18 @@ export default function ReservationList({
           return (
             <div key={g.key} className={`p-3 ${isCancelled ? 'opacity-50' : ''} ${g.arrived ? 'bg-green-50/50' : ''}`}>
               <div className="flex items-start justify-between gap-2">
-                <div className="flex items-start gap-2 flex-1 min-w-0">
+                {!isCancelled && (
+                  <button
+                    type="button"
+                    onClick={() => openCancel(g)}
+                    className="shrink-0 w-9 h-9 flex items-center justify-center rounded-lg border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 text-lg leading-none order-2"
+                    aria-label={`Cancelar reserva de ${g.client_name}`}
+                    title="Cancelar reserva"
+                  >
+                    ✗
+                  </button>
+                )}
+                <div className="flex items-start gap-2 flex-1 min-w-0 order-1">
                   {!isCancelled && (
                     <input type="checkbox" checked={g.arrived}
                       onChange={() => toggleArrivedGroup(ids, g.arrived, g)}
@@ -259,6 +312,7 @@ export default function ReservationList({
               <th className="text-left px-3 py-2 text-xs text-gray-600">Atendido</th>
               <th className="text-left px-3 py-2 text-xs text-gray-600">Oficina</th>
               <th className="text-center px-3 py-2 text-xs text-gray-600">Estado</th>
+              <th className="text-center px-3 py-2 text-xs text-gray-600"></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
@@ -302,6 +356,19 @@ export default function ReservationList({
                   <td className="px-3 py-2 text-gray-600">{g.staff ?? '—'}</td>
                   <td className="px-3 py-2 text-gray-600">{g.office ?? '—'}</td>
                   <td className="px-3 py-2 text-center"><StatusBadge status={g.status} /></td>
+                  <td className="px-3 py-2 text-center">
+                    {!isCancelled && (
+                      <button
+                        type="button"
+                        onClick={() => openCancel(g)}
+                        className="w-7 h-7 inline-flex items-center justify-center rounded border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 text-sm leading-none"
+                        aria-label={`Cancelar reserva de ${g.client_name}`}
+                        title="Cancelar reserva"
+                      >
+                        ✗
+                      </button>
+                    )}
+                  </td>
                 </tr>
               )
             })}
@@ -312,6 +379,57 @@ export default function ReservationList({
       {search && grouped.length === 0 && (
         <div className="p-4 text-center text-sm text-gray-500">
           No se encontraron reservas para &quot;{search}&quot;
+        </div>
+      )}
+
+      {cancelling && (
+        <div
+          className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4"
+          onClick={() => !cancelSaving && setCancelling(null)}
+        >
+          <div
+            className="bg-white rounded-xl shadow-xl max-w-sm w-full p-5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="font-semibold text-gray-900 mb-2">Cancelar reserva</h3>
+            <p className="text-sm text-gray-600 mb-4">
+              ¿Cancelar la reserva de <span className="font-semibold text-gray-900">{cancelling.client_name}</span>
+              {' '}({cancelling.time?.slice(0, 5)} · {cancelling.activity})?
+            </p>
+            <label className="block text-xs text-gray-500 mb-1">Cancelado por *</label>
+            <select
+              value={cancelledBy}
+              onChange={(e) => { setCancelledBy(e.target.value); setCancelError(null) }}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 outline-none focus:ring-2 focus:ring-sky-500 mb-3"
+              autoFocus
+            >
+              <option value="">--</option>
+              {staffNames.map((n) => (
+                <option key={n} value={n}>{n}</option>
+              ))}
+            </select>
+            {cancelError && (
+              <p className="text-sm text-red-600 mb-2">{cancelError}</p>
+            )}
+            <div className="flex gap-2 justify-end">
+              <button
+                type="button"
+                onClick={() => setCancelling(null)}
+                disabled={cancelSaving}
+                className="px-3 py-2 text-sm text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50"
+              >
+                Volver
+              </button>
+              <button
+                type="button"
+                onClick={confirmCancel}
+                disabled={cancelSaving}
+                className="px-3 py-2 text-sm text-white bg-red-600 hover:bg-red-700 disabled:bg-gray-400 rounded-lg font-medium"
+              >
+                {cancelSaving ? 'Cancelando...' : 'Cancelar reserva'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

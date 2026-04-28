@@ -83,6 +83,7 @@ export default async function DashboardPage({
   const nauticRes = byType('nautic')
   const parasailingRes = byType('parasailing')
   const jetsRes = byType('jets')
+  const fliteboardRes = byType('fliteboard')
   const peopleIn = (rs: Reservation[]) => rs.reduce((s, r) => s + r.num_people, 0)
 
   const totalPeople = peopleIn(active)
@@ -108,7 +109,7 @@ export default async function DashboardPage({
 
   // By activity name (for nautic breakdown)
   const byActivity: Record<string, { people: number; capacity: number; color: string }> = {}
-  for (const t of ['nautic', 'parasailing']) {
+  for (const t of ['nautic', 'parasailing', 'fliteboard']) {
     for (const a of ACTIVITIES[t] ?? []) {
       byActivity[a.name] = { people: 0, capacity: 0, color: a.color }
     }
@@ -132,6 +133,15 @@ export default async function DashboardPage({
   // Incidents for the day — include both active and cancelled reservations with an incident
   const incidents = resForDate.filter((r) => r.incident_type)
   const cancelledToday = resForDate.filter((r) => r.status === 'Cancelada' && r.incident_type)
+  const simpleCancellations = resForDate.filter((r) => r.status === 'Cancelada' && !r.incident_type)
+
+  // Map reservationId → who cancelled it (from audit log)
+  const cancelledByMap = new Map<string, string | null>()
+  for (const a of audit) {
+    if (a.action === 'cancelled' && a.reservation_id) {
+      cancelledByMap.set(a.reservation_id, a.performed_by)
+    }
+  }
 
   // Refunds today (incident-based, for the selected date)
   const refundRows = resForDate.filter(
@@ -270,6 +280,12 @@ export default async function DashboardPage({
             sub={`${parasailingRes.length} reservas`}
             color="#8b5cf6"
           />
+          <MiniStat
+            label="Fliteboard"
+            value={String(peopleIn(fliteboardRes))}
+            sub={`${fliteboardRes.length} reserva${fliteboardRes.length !== 1 ? 's' : ''}`}
+            color="#14b8a6"
+          />
         </div>
       </Section>
 
@@ -368,6 +384,39 @@ export default async function DashboardPage({
                 )}
               </div>
             ))}
+          </div>
+        )}
+      </Section>
+
+      {/* Canceladas sin incidencia */}
+      <Section title={`Canceladas sin incidencia (${simpleCancellations.length})`}>
+        {simpleCancellations.length === 0 ? (
+          <p className="text-gray-500 text-sm py-2">Sin cancelaciones simples este dia.</p>
+        ) : (
+          <div className="space-y-1.5">
+            {simpleCancellations
+              .sort((a, b) => (a.time ?? '').localeCompare(b.time ?? ''))
+              .map((r) => (
+                <div
+                  key={r.id}
+                  className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-sm bg-red-50 border border-red-200 rounded-lg px-3 py-1.5"
+                >
+                  <span className="font-mono text-xs text-gray-500">{r.time?.slice(0, 5)}</span>
+                  <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-white text-gray-700 uppercase">
+                    {r.activity_type}
+                  </span>
+                  <span className="font-semibold text-gray-900 line-through">{r.client_name}</span>
+                  <span className="text-gray-600">·</span>
+                  <span className="text-gray-700">{r.activity}</span>
+                  {cancelledByMap.get(r.id) && (
+                    <>
+                      <span className="text-gray-600">·</span>
+                      <span className="text-xs text-gray-600">por {cancelledByMap.get(r.id)}</span>
+                    </>
+                  )}
+                  <span className="ml-auto text-xs text-gray-500">{r.num_people} pers.</span>
+                </div>
+              ))}
           </div>
         )}
       </Section>
