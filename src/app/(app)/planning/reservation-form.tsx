@@ -7,7 +7,7 @@ import { logAudit } from '@/lib/audit'
 import { OFFICES, TIME_SLOTS } from '@/lib/config'
 import { getStoredOffice } from '@/lib/office'
 
-type Activity = { name: string; capacity: number; hardMax: number; color: string }
+type Activity = { name: string; capacity: number; hardMax: number; color: string; softLimit?: boolean }
 
 export default function ReservationForm({
   date,
@@ -81,7 +81,11 @@ export default function ReservationForm({
     }
     const afterBooking = currentOccupancy + numPeople
     if (afterBooking > activityConfig.hardMax) {
-      setWarning(`BLOQUEADO: ${afterBooking} personas supera el maximo absoluto de ${activityConfig.hardMax} para ${activity}.`)
+      if (activityConfig.softLimit) {
+        setWarning(`Atencion: ${afterBooking} plazas, por encima del limite recomendado de ${activityConfig.hardMax} para ${activity}.`)
+      } else {
+        setWarning(`BLOQUEADO: ${afterBooking} personas supera el maximo absoluto de ${activityConfig.hardMax} para ${activity}.`)
+      }
     } else if (afterBooking > activityConfig.capacity) {
       setWarning(`Atencion: ${afterBooking} personas supera la capacidad normal de ${activityConfig.capacity} para ${activity}. (Maximo absoluto: ${activityConfig.hardMax})`)
     } else {
@@ -89,7 +93,9 @@ export default function ReservationForm({
     }
   }, [currentOccupancy, numPeople, activityConfig, activity, time])
 
-  const isBlocked = activityConfig && time && (currentOccupancy + numPeople) > activityConfig.hardMax
+  const overHardMax = activityConfig && time && (currentOccupancy + numPeople) > activityConfig.hardMax
+  const isBlocked = overHardMax && !activityConfig?.softLimit
+  const showRedSoftWarning = overHardMax && activityConfig?.softLimit
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -220,7 +226,7 @@ export default function ReservationForm({
               value={numPeople}
               onChange={(e) => setNumPeople(Number(e.target.value))}
               className={`w-full px-2 py-2.5 sm:py-1.5 border rounded-lg text-sm text-gray-900 outline-none focus:ring-2 focus:ring-sky-500 min-h-[44px] sm:min-h-0 ${
-                isBlocked ? 'border-red-400 bg-red-50' : warning ? 'border-amber-400 bg-amber-50' : 'border-gray-300'
+                (isBlocked || showRedSoftWarning) ? 'border-red-400 bg-red-50' : warning ? 'border-amber-400 bg-amber-50' : 'border-gray-300'
               }`}
             />
           </div>
@@ -310,12 +316,12 @@ export default function ReservationForm({
         )}
 
         {/* Warning or block message */}
-        {warning && !isBlocked && (
+        {warning && !isBlocked && !showRedSoftWarning && (
           <div className="mt-2 p-2 bg-amber-50 border border-amber-300 rounded-lg text-sm text-amber-800">
             {warning}
           </div>
         )}
-        {isBlocked && (
+        {(isBlocked || showRedSoftWarning) && (
           <div className="mt-2 p-2 bg-red-50 border border-red-300 rounded-lg text-sm text-red-800">
             {warning}
           </div>

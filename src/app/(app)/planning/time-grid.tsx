@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { formatDateLong } from '@/lib/date'
 
-type Activity = { name: string; capacity: number; hardMax: number; color: string }
+type Activity = { name: string; capacity: number; hardMax: number; color: string; softLimit?: boolean }
 type Reservation = {
   id: string
   activity: string
